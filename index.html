@@ -1,0 +1,2136 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>八堵廠撤廠車主分流與工單類別追蹤儀表板</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans TC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS (XLSX) for Excel/CSV parsing & export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for responsive interactive charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-600 to-indigo-700 flex items-center justify-center text-white shadow-sm shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">八堵廠撤廠車主分流與工單追蹤</h1>
+                        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                            撤廠流向 × 工單類別
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500">追蹤原八堵廠車主轉往各兄弟廠之每週回廠動能與維修項目結構（對齊樞紐口徑）</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button id="btn-load-sample" class="px-3 py-2 text-xs sm:text-sm font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span>載入撤廠範例報表</span>
+                </button>
+                <button id="btn-export-excel" class="hidden px-3 py-2 text-xs sm:text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    <span>匯出分流分析報表</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Upload & Config Section -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-xs font-bold flex items-center justify-center">1</span>
+                        上傳服務廠工單明細報表
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">支援 .xlsx, .xls, .csv 格式（自動跳過報表大標題列並對齊「計數 - 牌照號碼」口徑）</p>
+                </div>
+
+                <!-- Target Previous Branch Filter -->
+                <div class="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <label for="target-branch-input" class="text-xs font-semibold text-slate-600 pl-1">撤廠追蹤對象：</label>
+                    <input type="text" id="target-branch-input" value="八堵" placeholder="輸入原保養廠名稱..." class="text-xs sm:text-sm font-semibold text-sky-800 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 w-32 sm:w-36 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                    <select id="detected-branches-select" class="text-xs text-slate-600 bg-white border border-slate-300 rounded-lg px-2 py-1.5 max-w-[150px] outline-none">
+                        <option value="">快選廠別</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Drag & Drop Zone -->
+            <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-sky-500 bg-slate-50/70 hover:bg-sky-50/40 rounded-2xl p-6 sm:p-8 text-center transition-all cursor-pointer group">
+                <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="hidden">
+                <div class="w-12 h-12 rounded-2xl bg-white shadow-xs border border-slate-200 flex items-center justify-center mx-auto mb-3 text-sky-600 group-hover:scale-105 transition-transform">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <p class="text-sm font-semibold text-slate-700">點擊選擇報表檔案，或將 Excel / CSV 拖曳至此處</p>
+                <p class="text-xs text-slate-400 mt-1">所有資料僅在您的瀏覽器本機端即時運算，不會上傳至任何外部伺服器</p>
+            </div>
+
+            <!-- File Info & Column Mapping Toggle -->
+            <div id="file-info-bar" class="hidden mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </span>
+                    <div>
+                        <p id="file-name-display" class="text-sm font-semibold text-slate-800">report.xlsx</p>
+                        <p id="file-rows-display" class="text-xs text-slate-500">已讀取 0 筆資料</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-toggle-mapping" class="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>欄位與標題列設定</span>
+                    </button>
+                    <button id="btn-reupload" class="px-3 py-1.5 text-xs font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg transition cursor-pointer">
+                        更換檔案
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column Mapping Panel -->
+            <div id="mapping-panel" class="hidden mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <p class="text-xs font-bold text-slate-800">報表工作表與標題列位置（自動跳過報表名稱大標題）</p>
+                        <p id="header-preview-text" class="text-[11px] text-slate-500 mt-0.5 truncate max-w-2xl">偵測到欄位：--</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex items-center gap-1.5">
+                            <label for="sheet-select" class="text-xs font-semibold text-slate-600">工作表：</label>
+                            <select id="sheet-select" class="text-xs rounded-lg border border-slate-300 px-2 py-1.5 bg-white outline-none"></select>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <label for="header-row-input" class="text-xs font-semibold text-slate-600">標題所在列數 (Row)：</label>
+                            <div class="flex items-center">
+                                <button type="button" id="btn-header-row-dec" class="px-2 py-1 bg-white border border-slate-300 rounded-l-lg text-xs font-bold hover:bg-slate-100 cursor-pointer">-1</button>
+                                <input type="number" id="header-row-input" min="1" max="50" value="1" class="w-12 text-center text-xs font-bold border-y border-slate-300 py-1 bg-white outline-none">
+                                <button type="button" id="btn-header-row-inc" class="px-2 py-1 bg-white border border-slate-300 rounded-r-lg text-xs font-bold hover:bg-slate-100 cursor-pointer">+1</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">上次保養廠別欄位 <span class="text-rose-500">*</span></label>
+                        <select id="map-prev-branch" class="w-full text-sm rounded-lg border-slate-300 border px-3 py-2 bg-white focus:ring-2 focus:ring-sky-500 outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">本次進廠日期欄位 <span class="text-rose-500">*</span></label>
+                        <select id="map-return-date" class="w-full text-sm rounded-lg border-slate-300 border px-3 py-2 bg-white focus:ring-2 focus:ring-sky-500 outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">本次進廠廠別欄位 (分流去向) <span class="text-rose-500">*</span></label>
+                        <select id="map-curr-branch" class="w-full text-sm rounded-lg border-slate-300 border px-3 py-2 bg-white focus:ring-2 focus:ring-sky-500 outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">工單類別欄位 (維修/定保性質) <span class="text-rose-500">*</span></label>
+                        <select id="map-order-type" class="w-full text-sm rounded-lg border-slate-300 border px-3 py-2 bg-white focus:ring-2 focus:ring-sky-500 outline-none"></select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">牌照號碼 (樞紐基準) <span class="text-rose-500">*</span></label>
+                            <select id="map-plate" class="w-full text-sm rounded-lg border-slate-300 border px-2 py-2 bg-white focus:ring-2 focus:ring-sky-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">工單金額 (選填)</label>
+                            <select id="map-amount" class="w-full text-sm rounded-lg border-slate-300 border px-2 py-2 bg-white focus:ring-2 focus:ring-sky-500 outline-none"></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button id="btn-apply-mapping" class="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition cursor-pointer">
+                        套用並重新分析
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard-content" class="hidden space-y-6">
+
+            <!-- Interactive Cross-Filter Bar -->
+            <section class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="w-2.5 h-2.5 rounded-full bg-sky-600 animate-pulse"></span>
+                        <span class="font-bold text-slate-800">撤廠追蹤對象：<span id="active-branch-label" class="text-sky-700">八堵</span></span>
+                        <span id="date-range-badge" class="text-xs text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">資料區間：--</span>
+                    </div>
+                    <button id="btn-reset-cross-filters" class="hidden text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-lg transition cursor-pointer">
+                        清除篩選條件
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-1">
+                    <div>
+                        <span class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">依目前回廠服務廠篩選（分流去向）：</span>
+                        <div id="branch-filter-pills" class="flex flex-wrap gap-1.5"></div>
+                    </div>
+                    <div>
+                        <span class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">依工單類別篩選（作業性質）：</span>
+                        <div id="type-filter-pills" class="flex flex-wrap gap-1.5"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- KPI Cards Grid -->
+            <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">原八堵車主總回流</span>
+                        <span class="p-2 rounded-xl bg-sky-50 text-sky-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </span>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-2">
+                            <span id="kpi-total-visits" class="text-3xl font-bold text-slate-900">0</span>
+                            <span class="text-sm text-slate-500">台次</span>
+                        </div>
+                        <p id="kpi-unique-cars-sub" class="text-xs text-slate-500 mt-1">不重複車主：-- 輛</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">最大承接服務廠</span>
+                        <span class="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                        </span>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-2">
+                            <span id="kpi-top-branch-name" class="text-2xl font-bold text-indigo-700 truncate">--</span>
+                        </div>
+                        <p id="kpi-top-branch-sub" class="text-xs text-slate-500 mt-1">承接 -- 台次 (佔 --%)</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">主力回廠工單類別</span>
+                        <span class="p-2 rounded-xl bg-amber-50 text-amber-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </span>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-2">
+                            <span id="kpi-top-type-name" class="text-2xl font-bold text-amber-700 truncate">--</span>
+                        </div>
+                        <p id="kpi-top-type-sub" class="text-xs text-slate-500 mt-1">佔比 --% (-- 台次)</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="kpi-avg-label" class="text-xs font-semibold text-slate-500 uppercase tracking-wider">週均回流台次</span>
+                        <span class="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                        </span>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-2">
+                            <span id="kpi-avg-weekly" class="text-3xl font-bold text-slate-900">0</span>
+                            <span id="kpi-avg-unit" class="text-sm text-slate-500">台次 / 週</span>
+                        </div>
+                        <p id="kpi-latest-week-sub" class="text-xs text-slate-500 mt-1 truncate">最新一期：--</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Data Audit Banner (對齊樞紐分析表口徑稽核列) -->
+            <section id="audit-banner" class="bg-sky-50/90 border border-sky-200/80 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-slate-700">
+                    <span class="inline-flex items-center gap-1.5 font-bold text-sky-900">
+                        <svg class="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        資料口徑稽核（對齊樞紐「計數 - 牌照號碼」）：
+                    </span>
+                    <span>
+                        有效牌照工單：<strong id="audit-valid-count" class="text-sky-800 font-bold">0</strong> 筆
+                    </span>
+                    <span class="text-slate-300">|</span>
+                    <span>
+                        已排除無車牌/合計列：<strong id="audit-excluded-count" class="text-slate-800 font-semibold">0</strong> 筆
+                    </span>
+                    <span class="text-slate-300">|</span>
+                    <span>
+                        其中未填/異常日期：<strong id="audit-undated-count" class="text-amber-700 font-semibold">0</strong> 筆（已保留計入總台次）
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btn-inspect-undated" class="hidden px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold transition cursor-pointer">
+                        檢視未填日期明細
+                    </button>
+                    <button type="button" id="btn-inspect-excluded" class="hidden px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-medium transition cursor-pointer">
+                        檢視排除列 (<span id="btn-excluded-num">0</span>)
+                    </button>
+                </div>
+            </section>
+
+            <!-- Chart 1: Weekly Stacked Trend Chart with Dimension Switcher -->
+            <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h3 id="trend-chart-title" class="text-base font-bold text-slate-800">每週原八堵廠車主回廠趨勢（依承接服務廠堆疊）</h3>
+                        <p id="trend-chart-subtitle" class="text-xs text-slate-500">觀察每週各服務廠承接八堵廠車主的台次消長（週一至週日為一週）</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="inline-flex rounded-lg bg-slate-100 p-1 text-xs font-medium">
+                            <button id="btn-stack-branch" class="px-2.5 py-1 rounded-md bg-white text-sky-700 shadow-xs font-semibold transition cursor-pointer">按承接廠別堆疊</button>
+                            <button id="btn-stack-type" class="px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer">按工單類別堆疊</button>
+                        </div>
+                        <div class="inline-flex rounded-lg bg-slate-100 p-1 text-xs font-medium">
+                            <button id="btn-period-week" class="px-2.5 py-1 rounded-md bg-white text-slate-800 shadow-xs font-semibold transition cursor-pointer">每週</button>
+                            <button id="btn-period-month" class="px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer">每月</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative h-72 sm:h-80 w-full">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Dual Breakdown Charts: Branch Distribution & Work Order Type Distribution -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 flex flex-col">
+                    <div class="mb-4">
+                        <h3 class="text-base font-bold text-slate-800">各服務廠承接比例（分流去向）</h3>
+                        <p class="text-xs text-slate-500">點擊圖表區塊或上方標籤可篩選單一服務廠明細</p>
+                    </div>
+                    <div class="relative h-64 w-full flex-grow flex items-center justify-center">
+                        <canvas id="branchDoughnutChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 flex flex-col">
+                    <div class="mb-4">
+                        <h3 class="text-base font-bold text-slate-800">回廠工單類別結構分析</h3>
+                        <p class="text-xs text-slate-500">了解原八堵廠車主目前回廠主要進行哪些維修或保養項目</p>
+                    </div>
+                    <div class="relative h-64 w-full flex-grow flex items-center justify-center">
+                        <canvas id="typeBarChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cross Matrix Table: Receiving Branch x Work Order Type -->
+            <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/70">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800">承接服務廠 × 工單類別 交叉統計矩陣</h3>
+                        <p class="text-xs text-slate-500">完整掌握各服務廠吸收的台次分布、工單結構與不重複車輛數（100% 對齊 Excel 樞紐分析表）</p>
+                    </div>
+                    <span class="text-xs font-medium text-slate-500">點擊任一服務廠列可連動篩選</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead id="pivot-matrix-head"></thead>
+                        <tbody id="pivot-matrix-body" class="divide-y divide-slate-100"></tbody>
+                        <tfoot id="pivot-matrix-foot" class="bg-slate-100/80 font-bold text-slate-900 border-t-2 border-slate-300"></tfoot>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Detailed Data Tables Section (Tabs: Weekly Breakdown vs Vehicle Records) -->
+            <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="border-b border-slate-200 px-5 pt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex gap-4">
+                        <button id="tab-weekly" class="pb-3 text-sm font-bold text-sky-700 border-b-2 border-sky-600 transition cursor-pointer">
+                            每週分流明細表 (<span id="tab-weekly-count">0</span>)
+                        </button>
+                        <button id="tab-records" class="pb-3 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent transition cursor-pointer">
+                            回流車輛工單明細 (<span id="tab-records-count">0</span>)
+                        </button>
+                    </div>
+
+                    <div id="records-filter-bar" class="hidden pb-2 flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <button type="button" id="btn-toggle-undated-only" class="hidden text-xs font-medium px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition cursor-pointer">
+                            僅看未填日期
+                        </button>
+                        <input type="text" id="record-search-input" placeholder="搜尋車牌、承接廠別、工單類別或日期..." class="w-full sm:w-64 text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white focus:ring-2 focus:ring-sky-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- Tab 1: Weekly Breakdown Table -->
+                <div id="panel-weekly" class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead id="weekly-table-head"></thead>
+                        <tbody id="weekly-table-body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+
+                <!-- Tab 2: Filtered Vehicle Records Table -->
+                <div id="panel-records" class="hidden overflow-x-auto max-h-[480px]">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="sticky top-0 z-10">
+                            <tr class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                                <th class="py-3 px-4 font-semibold">#</th>
+                                <th class="py-3 px-4 font-semibold">本次進廠日期</th>
+                                <th class="py-3 px-4 font-semibold">所屬週次</th>
+                                <th class="py-3 px-4 font-semibold">牌照號碼</th>
+                                <th class="py-3 px-4 font-semibold">上次保養廠</th>
+                                <th class="py-3 px-4 font-semibold">目前回廠廠別</th>
+                                <th class="py-3 px-4 font-semibold">工單類別</th>
+                                <th id="th-record-amount" class="py-3 px-4 font-semibold text-right hidden">工單金額</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-table-body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Audit Modal for Excluded Rows -->
+    <div id="audit-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-4xl w-full max-h-[82vh] flex flex-col overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 id="audit-modal-title" class="text-base font-bold text-slate-800">資料稽核明細</h3>
+                    <p id="audit-modal-subtitle" class="text-xs text-slate-500 mt-0.5">檢視因車牌空白或判定為合計/總計列而未計入樞紐總數的資料列</p>
+                </div>
+                <button type="button" id="btn-close-audit-modal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition cursor-pointer">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="overflow-auto p-0 flex-grow">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-100 text-slate-600 uppercase sticky top-0 border-b border-slate-200">
+                        <tr>
+                            <th class="py-2.5 px-4 font-semibold">原始列號</th>
+                            <th class="py-2.5 px-4 font-semibold">排除原因</th>
+                            <th class="py-2.5 px-4 font-semibold">牌照號碼</th>
+                            <th class="py-2.5 px-4 font-semibold">上次保養廠</th>
+                            <th class="py-2.5 px-4 font-semibold">本次進廠廠別</th>
+                            <th class="py-2.5 px-4 font-semibold">工單類別</th>
+                            <th class="py-2.5 px-4 font-semibold">進廠日期</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-modal-tbody" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+            <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+                <button type="button" id="btn-confirm-audit-modal" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition cursor-pointer">
+                    關閉視窗
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-400">
+            八堵廠撤廠車主分流與工單類別追蹤系統 • 對齊 Excel 樞紐「計數 - 牌照號碼」口徑與本機端即時交叉分析
+        </div>
+    </footer>
+
+    <script>
+        /**
+         * Color Palette for Service Branches & Work Order Types
+         */
+        const BRANCH_PALETTE = [
+            '#0284c7', '#4f46e5', '#059669', '#d97706', '#e11d48',
+            '#7c3aed', '#0891b2', '#65a30d', '#ea580c', '#475569'
+        ];
+
+        const TYPE_PALETTE = [
+            '#f59e0b', '#0ea5e9', '#10b981', '#8b5cf6', '#f43f5e',
+            '#14b8a6', '#6366f1', '#84cc16', '#ec4899', '#64748b'
+        ];
+
+        /**
+         * Global Application State
+         */
+        const state = {
+            workbook: null,
+            sheetNames: [],
+            currentSheet: '',
+            rawGrid: [],
+            headerRowIndex: 0,
+            rawData: [],
+            headers: [],
+            fileName: '',
+            periodMode: 'week',        // 'week' | 'month'
+            stackDimension: 'branch',  // 'branch' | 'type'
+            selectedBranchFilter: 'ALL',
+            selectedTypeFilter: 'ALL',
+            onlyUndatedFilter: false,
+            mapping: {
+                prevBranch: '',
+                returnDate: '',
+                currBranch: '',
+                orderType: '',
+                plate: '',
+                amount: ''
+            },
+            targetBranch: '八堵',
+            baseRecords: [],
+            excludedRows: [],
+            filteredRecords: [],
+            periodStats: [],
+            branchList: [],
+            typeList: [],
+            pivotRows: [],
+            charts: {
+                weekly: null,
+                branch: null,
+                type: null
+            }
+        };
+
+        /**
+         * Utility: Normalize cell text (trim, collapse whitespace, replace full-width spaces)
+         */
+        function normalizeText(val) {
+            if (val === null || val === undefined) return '';
+            return String(val)
+                .replace(/\u3000/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        /**
+         * Utility: Check if a row or cell represents a summary/total line
+         */
+        function isSummaryLabel(text) {
+            if (!text) return false;
+            return /^(總計|合計|小計|總數|Grand Total|Total)$/i.test(text) || /^(總計|合計|小計)\s*[:：]/.test(text);
+        }
+
+        /**
+         * Utility: Show Toast Message
+         */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const colors = {
+                info: 'bg-slate-800 text-white border-slate-700',
+                success: 'bg-emerald-700 text-white border-emerald-600',
+                warning: 'bg-amber-600 text-white border-amber-500',
+                error: 'bg-rose-600 text-white border-rose-500'
+            };
+            const toast = document.createElement('div');
+            toast.className = `${colors[type] || colors.info} border px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-medium flex items-center justify-between gap-3 transition-all duration-300 pointer-events-auto`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-4');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        /**
+         * Utility: Convert column index to Excel letter (0 -> A, 25 -> Z, 26 -> AA)
+         */
+        function colIndexToLetter(idx) {
+            let letter = '';
+            let temp = idx;
+            while (temp >= 0) {
+                letter = String.fromCharCode((temp % 26) + 65) + letter;
+                temp = Math.floor(temp / 26) - 1;
+            }
+            return letter;
+        }
+
+        /**
+         * Smart Header Row Detector
+         */
+        function detectHeaderRowIndex(grid) {
+            const keywords = [
+                '車牌', '牌照', '車號', '進廠', '保養', '廠別', '服務廠', '據點',
+                '日期', '時間', '工單', '金額', '里程', '車型', '車主', '姓名',
+                '序號', '項次', '類別', '性質', '維修', '專案'
+            ];
+
+            let bestIdx = 0;
+            let bestScore = -1;
+            const scanLimit = Math.min(grid.length, 25);
+
+            for (let r = 0; r < scanLimit; r++) {
+                const row = grid[r] || [];
+                let nonEmptyCount = 0;
+                let keywordHits = 0;
+
+                for (let c = 0; c < row.length; c++) {
+                    const cell = normalizeText(row[c]);
+                    if (cell !== '') {
+                        nonEmptyCount++;
+                        if (cell.length <= 20 && keywords.some(kw => cell.includes(kw))) {
+                            keywordHits++;
+                        }
+                    }
+                }
+
+                if (nonEmptyCount < 3) continue;
+
+                const score = keywordHits * 10 + nonEmptyCount;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestIdx = r;
+                }
+            }
+
+            return bestIdx;
+        }
+
+        /**
+         * Build Structured Headers & Data Rows from 2D Grid at a given headerRowIndex
+         */
+        function extractTableFromGrid(grid, headerIdx) {
+            const rawHeaderRow = grid[headerIdx] || [];
+            const maxCols = grid.reduce((max, r) => Math.max(max, (r || []).length), rawHeaderRow.length);
+
+            const headers = [];
+            const seenCounts = {};
+
+            for (let c = 0; c < maxCols; c++) {
+                let name = normalizeText(rawHeaderRow[c]);
+                if (!name) {
+                    name = `未命名欄_${colIndexToLetter(c)}`;
+                }
+
+                if (seenCounts[name] !== undefined) {
+                    seenCounts[name] += 1;
+                    name = `${name} (欄${colIndexToLetter(c)})`;
+                } else {
+                    seenCounts[name] = 1;
+                }
+                headers.push(name);
+            }
+
+            const rows = [];
+            for (let r = headerIdx + 1; r < grid.length; r++) {
+                const rowArr = grid[r] || [];
+                let hasContent = false;
+                const obj = {};
+                for (let c = 0; c < headers.length; c++) {
+                    const val = rowArr[c] !== undefined && rowArr[c] !== null ? rowArr[c] : '';
+                    if (normalizeText(val) !== '') {
+                        hasContent = true;
+                    }
+                    obj[headers[c]] = val;
+                }
+                if (hasContent) {
+                    const firstFewCells = rowArr.slice(0, 4).map(v => normalizeText(v)).join('');
+                    if (/^(總計|合計|小計|共\d+筆)/.test(firstFewCells)) continue;
+                    rows.push(obj);
+                }
+            }
+
+            return { headers, rows };
+        }
+
+        /**
+         * Utility: Flexible Date Parser (Supports AD, Taiwan ROC Year, Excel Serial, Timestamps)
+         */
+        function parseFlexibleDate(val) {
+            if (val === null || val === undefined || val === '') return null;
+
+            if (val instanceof Date && !isNaN(val.getTime())) {
+                return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+            }
+
+            if (typeof val === 'number' && val > 20000 && val < 80000) {
+                const utcDays = Math.floor(val - 25569);
+                const dateInfo = new Date(utcDays * 86400 * 1000);
+                return new Date(dateInfo.getUTCFullYear(), dateInfo.getUTCMonth(), dateInfo.getUTCDate());
+            }
+
+            let str = String(val).trim();
+            if (!str) return null;
+
+            str = str.replace(/年|月/g, '/').replace(/日/g, '');
+            const datePart = str.split(/[\sT]+/)[0];
+
+            const slashMatch = datePart.match(/^(\d{2,4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+            if (slashMatch) {
+                let year = parseInt(slashMatch[1], 10);
+                const month = parseInt(slashMatch[2], 10) - 1;
+                const day = parseInt(slashMatch[3], 10);
+
+                if (year < 1911) {
+                    year += 1911;
+                }
+                const d = new Date(year, month, day);
+                if (!isNaN(d.getTime()) && d.getFullYear() === year && d.getMonth() === month) {
+                    return d;
+                }
+            }
+
+            const compactMatch = datePart.match(/^(\d{7,8})$/);
+            if (compactMatch) {
+                const digits = compactMatch[1];
+                let year, month, day;
+                if (digits.length === 8) {
+                    year = parseInt(digits.slice(0, 4), 10);
+                    month = parseInt(digits.slice(4, 6), 10) - 1;
+                    day = parseInt(digits.slice(6, 8), 10);
+                } else {
+                    year = parseInt(digits.slice(0, 3), 10) + 1911;
+                    month = parseInt(digits.slice(3, 5), 10) - 1;
+                    day = parseInt(digits.slice(5, 7), 10);
+                }
+                const d = new Date(year, month, day);
+                if (!isNaN(d.getTime())) return d;
+            }
+
+            const fallback = new Date(str);
+            if (!isNaN(fallback.getTime())) {
+                return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+            }
+
+            return null;
+        }
+
+        /**
+         * Utility: Format Date as YYYY/MM/DD
+         */
+        function formatDate(date) {
+            if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--';
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}/${m}/${d}`;
+        }
+
+        /**
+         * Utility: Get Period Info (Weekly Monday-Sunday OR Monthly, with dedicated fallback for missing dates)
+         */
+        function getPeriodInfo(date, mode = 'week') {
+            if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+                return {
+                    periodKey: '未填日期',
+                    rangeLabel: '日期空白 / 待確認',
+                    shortLabel: '未填日期 / 待確認',
+                    compactLabel: '未填日期',
+                    sortKey: Number.MAX_SAFE_INTEGER,
+                    isUndated: true
+                };
+            }
+
+            if (mode === 'month') {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const lastDay = new Date(y, date.getMonth() + 1, 0).getDate();
+                const periodKey = `${y}-${m}`;
+                const rangeLabel = `${y}/${m}/01 ~ ${y}/${m}/${String(lastDay).padStart(2, '0')}`;
+                const sortKey = new Date(y, date.getMonth(), 1).getTime();
+                return {
+                    periodKey,
+                    rangeLabel,
+                    shortLabel: `${y}/${m}月`,
+                    compactLabel: `${y}/${m}月`,
+                    sortKey,
+                    isUndated: false
+                };
+            }
+
+            const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const dayOfWeek = d.getDay();
+            const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            const monday = new Date(d);
+            monday.setDate(d.getDate() + diffToMonday);
+
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+
+            const tempDate = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            const dayNum = tempDate.getUTCDay() || 7;
+            tempDate.setUTCDate(tempDate.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(tempDate.getUTCFullYear(), 0, 1));
+            const weekNo = Math.ceil((((tempDate - yearStart) / 86400000) + 1) / 7);
+            const isoYear = tempDate.getUTCFullYear();
+
+            const periodKey = `${isoYear}-W${String(weekNo).padStart(2, '0')}`;
+            const mStart = `${String(monday.getMonth() + 1).padStart(2, '0')}/${String(monday.getDate()).padStart(2, '0')}`;
+            const mEnd = `${String(sunday.getMonth() + 1).padStart(2, '0')}/${String(sunday.getDate()).padStart(2, '0')}`;
+            const rangeLabel = `${mStart} ~ ${mEnd}`;
+            const sortKey = monday.getTime();
+
+            return {
+                periodKey,
+                rangeLabel,
+                shortLabel: `${periodKey} (${mStart}~${mEnd})`,
+                compactLabel: `${mStart}~${mEnd}`,
+                sortKey,
+                isUndated: false
+            };
+        }
+
+        /**
+         * Auto-Detect Columns for Dealership Reports (Including Work Order Type)
+         */
+        function autoDetectColumns(headers) {
+            const findCol = (keywords, excludeKeywords = []) => {
+                for (const kw of keywords) {
+                    const exact = headers.find(h =>
+                        h.toLowerCase().includes(kw.toLowerCase()) &&
+                        !excludeKeywords.some(ex => h.toLowerCase().includes(ex.toLowerCase()))
+                    );
+                    if (exact) return exact;
+                }
+                return '';
+            };
+
+            state.mapping.prevBranch = findCol([
+                '上次保養廠別', '上次保養廠', '前次保養廠', '上次服務廠', '前次服務廠', '上次廠別', '原保養廠', '原服務廠', '上次進廠廠別'
+            ]);
+
+            state.mapping.returnDate = findCol([
+                '本次進廠日期', '進廠日期', '開單日期', '維修日期', '保養日期', '結帳日期', '回廠日期', '交車日期', '日期'
+            ], ['上次', '前次', '出廠', '領牌']);
+
+            state.mapping.currBranch = findCol([
+                '本次進廠廠別', '本次保養廠別', '本次服務廠', '進廠廠別', '服務廠別', '服務廠名稱', '廠別', '服務廠', '據點', '分廠'
+            ], ['上次', '前次', '原']);
+
+            state.mapping.orderType = findCol([
+                '工單類別', '維修類別', '作業類別', '保養類別', '工單性質', '維修性質', '進廠類別', '作業性質', '工單類型', '類別'
+            ], ['車型', '客戶', '會員']);
+
+            state.mapping.plate = findCol([
+                '牌照號碼', '車牌號碼', '車號', '車牌'
+            ]);
+
+            state.mapping.amount = findCol([
+                '工單總金額', '工單金額', '消費金額', '總金額', '實收金額', '含稅金額', '未稅金額', '金額'
+            ]);
+        }
+
+        /**
+         * Populate Mapping Dropdowns & Detected Branches
+         */
+        function populateMappingUI() {
+            const sheetSelect = document.getElementById('sheet-select');
+            sheetSelect.innerHTML = '';
+            state.sheetNames.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                if (name === state.currentSheet) opt.selected = true;
+                sheetSelect.appendChild(opt);
+            });
+
+            document.getElementById('header-row-input').value = state.headerRowIndex + 1;
+
+            const validHeaderPreview = state.headers.filter(h => !h.startsWith('未命名欄_')).slice(0, 8);
+            document.getElementById('header-preview-text').textContent =
+                `第 ${state.headerRowIndex + 1} 列欄位預覽：${validHeaderPreview.join('、')}${state.headers.length > 8 ? '...' : ''}`;
+            document.getElementById('file-rows-display').textContent =
+                `共讀取 ${state.rawData.length.toLocaleString()} 筆明細（標題位於第 ${state.headerRowIndex + 1} 列）`;
+
+            const selects = [
+                { id: 'map-prev-branch', key: 'prevBranch', required: true },
+                { id: 'map-return-date', key: 'returnDate', required: true },
+                { id: 'map-curr-branch', key: 'currBranch', required: true },
+                { id: 'map-order-type', key: 'orderType', required: true },
+                { id: 'map-plate', key: 'plate', required: false, emptyLabel: '(不指定 - 改以資料列數計算)' },
+                { id: 'map-amount', key: 'amount', required: false, emptyLabel: '(不指定 / 無此欄位)' }
+            ];
+
+            selects.forEach(({ id, key, required, emptyLabel }) => {
+                const el = document.getElementById(id);
+                el.innerHTML = required ? '<option value="">-- 請選擇欄位 --</option>' : `<option value="">${emptyLabel}</option>`;
+                state.headers.forEach(h => {
+                    const opt = document.createElement('option');
+                    opt.value = h;
+                    opt.textContent = h;
+                    if (state.mapping[key] === h) opt.selected = true;
+                    el.appendChild(opt);
+                });
+            });
+
+            updateDetectedBranchesDropdown();
+        }
+
+        function updateDetectedBranchesDropdown() {
+            const branchSelect = document.getElementById('detected-branches-select');
+            branchSelect.innerHTML = '<option value="">快選廠別</option>';
+            const col = state.mapping.prevBranch;
+            if (!col) return;
+
+            const uniqueBranches = new Set();
+            state.rawData.forEach(row => {
+                const val = normalizeText(row[col]);
+                if (val !== '' && !isSummaryLabel(val)) {
+                    uniqueBranches.add(val);
+                }
+            });
+
+            const sortedBranches = Array.from(uniqueBranches).sort();
+            sortedBranches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                branchSelect.appendChild(opt);
+            });
+
+            const currentTarget = normalizeText(document.getElementById('target-branch-input').value);
+            if (sortedBranches.length > 0 && currentTarget) {
+                const hasMatch = sortedBranches.some(b => b.toLowerCase().includes(currentTarget.toLowerCase()));
+                if (!hasMatch) {
+                    const baduMatch = sortedBranches.find(b => b.includes('八堵'));
+                    const fallbackBranch = baduMatch || sortedBranches[0];
+                    document.getElementById('target-branch-input').value = fallbackBranch;
+                    showToast(`報表中未找到「${currentTarget}」，已自動切換為「${fallbackBranch}」`, 'info');
+                }
+            }
+        }
+
+        /**
+         * Step 1: Extract Base Records aligned 100% with Excel Pivot Table ("計數 - 牌照號碼")
+         */
+        function buildBaseRecords() {
+            const { prevBranch, returnDate, currBranch, orderType, plate, amount } = state.mapping;
+            const targetKeyword = normalizeText(document.getElementById('target-branch-input').value);
+            state.targetBranch = targetKeyword;
+
+            if (!prevBranch || !returnDate || !currBranch || !orderType) {
+                showToast('請在「欄位與標題列設定」中確認所有必填欄位（上次保養廠、進廠日期、本次進廠廠別、工單類別）', 'warning');
+                document.getElementById('mapping-panel').classList.remove('hidden');
+                return;
+            }
+
+            if (!targetKeyword) {
+                showToast('請輸入撤廠追蹤對象關鍵字（例如：九和八堵廠 或 八堵）', 'warning');
+                return;
+            }
+
+            const base = [];
+            const excluded = [];
+
+            state.rawData.forEach((row, idx) => {
+                const excelRowNum = state.headerRowIndex + idx + 2;
+                const rawPrev = normalizeText(row[prevBranch]);
+                const rawCurr = normalizeText(row[currBranch]);
+                const rawType = normalizeText(row[orderType]);
+                const rawPlate = plate ? normalizeText(row[plate]).toUpperCase() : '';
+                const rawDateText = normalizeText(row[returnDate]);
+
+                if (isSummaryLabel(rawPrev) || isSummaryLabel(rawCurr) || isSummaryLabel(rawType) || isSummaryLabel(rawPlate)) {
+                    excluded.push({
+                        excelRowNum,
+                        reason: '報表合計 / 小計列',
+                        plate: rawPlate || '(空白)',
+                        prevBranch: rawPrev || '--',
+                        currBranch: rawCurr || '--',
+                        orderType: rawType || '--',
+                        dateStr: rawDateText || '--'
+                    });
+                    return;
+                }
+
+                if (!rawPrev.toLowerCase().includes(targetKeyword.toLowerCase())) {
+                    return;
+                }
+
+                if (plate && rawPlate === '') {
+                    excluded.push({
+                        excelRowNum,
+                        reason: '牌照號碼空白（樞紐分析表不計數）',
+                        plate: '(空白)',
+                        prevBranch: rawPrev,
+                        currBranch: rawCurr || '(空白)',
+                        orderType: rawType || '(空白)',
+                        dateStr: rawDateText || '(空白)'
+                    });
+                    return;
+                }
+
+                const parsedDate = parseFlexibleDate(row[returnDate]);
+                const isUndated = !parsedDate;
+                const weekInfo = getPeriodInfo(parsedDate, 'week');
+
+                let numAmount = 0;
+                if (amount && row[amount] !== undefined && row[amount] !== null) {
+                    const cleanedNum = String(row[amount]).replace(/[,$\s]/g, '');
+                    numAmount = parseFloat(cleanedNum) || 0;
+                }
+
+                base.push({
+                    originalIndex: idx + 1,
+                    excelRowNum,
+                    date: parsedDate,
+                    isUndated,
+                    dateStr: isUndated ? (rawDateText ? `異常(${rawDateText})` : '未填日期') : formatDate(parsedDate),
+                    weekKey: weekInfo.periodKey,
+                    plate: rawPlate,
+                    prevBranch: rawPrev,
+                    currBranch: rawCurr || '(空白)',
+                    orderType: rawType || '(空白)',
+                    amount: numAmount
+                });
+            });
+
+            base.sort((a, b) => {
+                if (a.isUndated && b.isUndated) return a.excelRowNum - b.excelRowNum;
+                if (a.isUndated) return 1;
+                if (b.isUndated) return -1;
+                return a.date - b.date;
+            });
+
+            state.baseRecords = base;
+            state.excludedRows = excluded;
+            state.selectedBranchFilter = 'ALL';
+            state.selectedTypeFilter = 'ALL';
+            state.onlyUndatedFilter = false;
+
+            if (base.length === 0) {
+                showToast(`找不到上次保養廠別包含「${targetKeyword}」且具有效牌照的資料，請確認標題列數或欄位對應。`, 'warning');
+                document.getElementById('mapping-panel').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('mapping-panel').classList.add('hidden');
+
+            renderInteractiveFilterPills();
+            runCrossFilteredAnalysis();
+
+            const undatedCount = base.filter(r => r.isUndated).length;
+            const auditMsg = undatedCount > 0
+                ? `成功對齊樞紐口徑：共 ${base.length} 筆有效牌照工單（含 ${undatedCount} 筆未填日期）`
+                : `成功對齊樞紐口徑：共 ${base.length} 筆有效牌照工單！`;
+            showToast(auditMsg, 'success');
+        }
+
+        /**
+         * Render Interactive Filter Pills for Receiving Branches & Work Order Types
+         */
+        function renderInteractiveFilterPills() {
+            const branchCounts = {};
+            const typeCounts = {};
+
+            state.baseRecords.forEach(r => {
+                branchCounts[r.currBranch] = (branchCounts[r.currBranch] || 0) + 1;
+                typeCounts[r.orderType] = (typeCounts[r.orderType] || 0) + 1;
+            });
+
+            const sortedBranches = Object.entries(branchCounts).sort((a, b) => b[1] - a[1]);
+            const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+
+            const branchContainer = document.getElementById('branch-filter-pills');
+            branchContainer.innerHTML = '';
+
+            const createPill = (label, count, isActive, onClick) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = isActive
+                    ? 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-600 text-white shadow-xs transition cursor-pointer'
+                    : 'px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer';
+                btn.textContent = `${label} (${count})`;
+                btn.addEventListener('click', onClick);
+                return btn;
+            };
+
+            branchContainer.appendChild(createPill('全部服務廠', state.baseRecords.length, state.selectedBranchFilter === 'ALL', () => {
+                state.selectedBranchFilter = 'ALL';
+                renderInteractiveFilterPills();
+                runCrossFilteredAnalysis();
+            }));
+
+            sortedBranches.forEach(([bName, cnt]) => {
+                branchContainer.appendChild(createPill(bName, cnt, state.selectedBranchFilter === bName, () => {
+                    state.selectedBranchFilter = state.selectedBranchFilter === bName ? 'ALL' : bName;
+                    renderInteractiveFilterPills();
+                    runCrossFilteredAnalysis();
+                }));
+            });
+
+            const typeContainer = document.getElementById('type-filter-pills');
+            typeContainer.innerHTML = '';
+
+            typeContainer.appendChild(createPill('全部工單類別', state.baseRecords.length, state.selectedTypeFilter === 'ALL', () => {
+                state.selectedTypeFilter = 'ALL';
+                renderInteractiveFilterPills();
+                runCrossFilteredAnalysis();
+            }));
+
+            sortedTypes.forEach(([tName, cnt]) => {
+                typeContainer.appendChild(createPill(tName, cnt, state.selectedTypeFilter === tName, () => {
+                    state.selectedTypeFilter = state.selectedTypeFilter === tName ? 'ALL' : tName;
+                    renderInteractiveFilterPills();
+                    runCrossFilteredAnalysis();
+                }));
+            });
+
+            const hasActiveFilter = state.selectedBranchFilter !== 'ALL' || state.selectedTypeFilter !== 'ALL';
+            document.getElementById('btn-reset-cross-filters').classList.toggle('hidden', !hasActiveFilter);
+        }
+
+        /**
+         * Step 2: Run Cross-Filtered Analysis & Update Charts / Pivot / Tables
+         */
+        function runCrossFilteredAnalysis() {
+            const { plate, amount } = state.mapping;
+
+            const records = state.baseRecords.filter(r => {
+                const matchBranch = state.selectedBranchFilter === 'ALL' || r.currBranch === state.selectedBranchFilter;
+                const matchType = state.selectedTypeFilter === 'ALL' || r.orderType === state.selectedTypeFilter;
+                return matchBranch && matchType;
+            });
+
+            state.filteredRecords = records;
+
+            const branchTotals = {};
+            const typeTotals = {};
+            const uniquePlates = new Set();
+
+            records.forEach(r => {
+                branchTotals[r.currBranch] = (branchTotals[r.currBranch] || 0) + 1;
+                typeTotals[r.orderType] = (typeTotals[r.orderType] || 0) + 1;
+                if (r.plate) uniquePlates.add(r.plate);
+            });
+
+            const sortedBranches = Object.keys(branchTotals).sort((a, b) => branchTotals[b] - branchTotals[a]);
+            const sortedTypes = Object.keys(typeTotals).sort((a, b) => typeTotals[b] - typeTotals[a]);
+            state.branchList = sortedBranches;
+            state.typeList = sortedTypes;
+
+            const periodMap = new Map();
+            records.forEach(r => {
+                const pInfo = getPeriodInfo(r.date, state.periodMode);
+                if (!periodMap.has(pInfo.periodKey)) {
+                    periodMap.set(pInfo.periodKey, {
+                        periodKey: pInfo.periodKey,
+                        rangeLabel: pInfo.rangeLabel,
+                        shortLabel: pInfo.shortLabel,
+                        compactLabel: pInfo.compactLabel || pInfo.shortLabel,
+                        sortKey: pInfo.sortKey,
+                        isUndated: pInfo.isUndated,
+                        visits: 0,
+                        byBranch: {},
+                        byType: {},
+                        plates: new Set(),
+                        amount: 0
+                    });
+                }
+                const p = periodMap.get(pInfo.periodKey);
+                p.visits += 1;
+                p.byBranch[r.currBranch] = (p.byBranch[r.currBranch] || 0) + 1;
+                p.byType[r.orderType] = (p.byType[r.orderType] || 0) + 1;
+                if (r.plate) p.plates.add(r.plate);
+                p.amount += r.amount;
+            });
+
+            const sortedPeriods = Array.from(periodMap.values()).sort((a, b) => a.sortKey - b.sortKey);
+            let cumulative = 0;
+            sortedPeriods.forEach((p, i) => {
+                cumulative += p.visits;
+                p.cumulative = cumulative;
+                p.uniqueCars = plate ? p.plates.size : p.visits;
+                if (i === 0 || p.isUndated || sortedPeriods[i - 1].isUndated) {
+                    p.wowChange = null;
+                } else {
+                    const prev = sortedPeriods[i - 1].visits;
+                    p.wowChange = prev > 0 ? ((p.visits - prev) / prev) * 100 : null;
+                }
+            });
+            state.periodStats = sortedPeriods;
+
+            const pivotMap = new Map();
+            sortedBranches.forEach(bName => {
+                pivotMap.set(bName, {
+                    branch: bName,
+                    typeCounts: {},
+                    totalVisits: 0,
+                    plates: new Set(),
+                    totalAmount: 0
+                });
+            });
+
+            records.forEach(r => {
+                const row = pivotMap.get(r.currBranch);
+                row.typeCounts[r.orderType] = (row.typeCounts[r.orderType] || 0) + 1;
+                row.totalVisits += 1;
+                if (r.plate) row.plates.add(r.plate);
+                row.totalAmount += r.amount;
+            });
+
+            state.pivotRows = Array.from(pivotMap.values()).sort((a, b) => b.totalVisits - a.totalVisits);
+
+            updateDashboardUI(uniquePlates.size, branchTotals, typeTotals, Boolean(plate), Boolean(amount));
+        }
+
+        /**
+         * Update KPIs, Audit Banner, Charts, Pivot Matrix, and Detail Tables
+         */
+        function updateDashboardUI(uniqueCarCount, branchTotals, typeTotals, hasPlate, hasAmount) {
+            const records = state.filteredRecords;
+            const periods = state.periodStats;
+            const isWeek = state.periodMode === 'week';
+
+            document.getElementById('dashboard-content').classList.remove('hidden');
+            document.getElementById('btn-export-excel').classList.remove('hidden');
+
+            const datedRecords = records.filter(r => !r.isUndated);
+            const undatedCount = records.length - datedRecords.length;
+
+            document.getElementById('active-branch-label').textContent = state.targetBranch;
+            if (datedRecords.length > 0) {
+                const rangeSuffix = undatedCount > 0 ? `（另有 ${undatedCount} 筆未填日期）` : '';
+                document.getElementById('date-range-badge').textContent = `資料區間：${datedRecords[0].dateStr} ~ ${datedRecords[datedRecords.length - 1].dateStr}${rangeSuffix}`;
+            } else if (records.length > 0) {
+                document.getElementById('date-range-badge').textContent = `資料區間：全部 ${records.length} 筆均未填日期`;
+            } else {
+                document.getElementById('date-range-badge').textContent = '資料區間：無符合資料';
+            }
+
+            document.getElementById('audit-valid-count').textContent = records.length.toLocaleString();
+            document.getElementById('audit-excluded-count').textContent = state.excludedRows.length.toLocaleString();
+            document.getElementById('audit-undated-count').textContent = undatedCount.toLocaleString();
+
+            const btnInspectUndated = document.getElementById('btn-inspect-undated');
+            btnInspectUndated.classList.toggle('hidden', undatedCount === 0);
+
+            const btnInspectExcluded = document.getElementById('btn-inspect-excluded');
+            document.getElementById('btn-excluded-num').textContent = state.excludedRows.length;
+            btnInspectExcluded.classList.toggle('hidden', state.excludedRows.length === 0);
+
+            const btnToggleUndatedOnly = document.getElementById('btn-toggle-undated-only');
+            btnToggleUndatedOnly.classList.toggle('hidden', undatedCount === 0);
+
+            document.getElementById('kpi-total-visits').textContent = records.length.toLocaleString();
+            if (hasPlate) {
+                const avgPerCar = uniqueCarCount > 0 ? (records.length / uniqueCarCount).toFixed(2) : 0;
+                document.getElementById('kpi-unique-cars-sub').textContent = `不重複車主：${uniqueCarCount.toLocaleString()} 輛 (平均 ${avgPerCar} 次/車)`;
+            } else {
+                document.getElementById('kpi-unique-cars-sub').textContent = `佔原${state.targetBranch}總回流 ${state.baseRecords.length > 0 ? ((records.length / state.baseRecords.length) * 100).toFixed(1) : 0}%`;
+            }
+
+            if (state.branchList.length > 0) {
+                const topBranch = state.branchList[0];
+                const topBranchCount = branchTotals[topBranch];
+                const topBranchRate = records.length > 0 ? ((topBranchCount / records.length) * 100).toFixed(1) : 0;
+                document.getElementById('kpi-top-branch-name').textContent = topBranch;
+                document.getElementById('kpi-top-branch-sub').textContent = `承接 ${topBranchCount.toLocaleString()} 台次 (佔 ${topBranchRate}%)`;
+            } else {
+                document.getElementById('kpi-top-branch-name').textContent = '--';
+                document.getElementById('kpi-top-branch-sub').textContent = '無資料';
+            }
+
+            if (state.typeList.length > 0) {
+                const topType = state.typeList[0];
+                const topTypeCount = typeTotals[topType];
+                const topTypeRate = records.length > 0 ? ((topTypeCount / records.length) * 100).toFixed(1) : 0;
+                document.getElementById('kpi-top-type-name').textContent = topType;
+                document.getElementById('kpi-top-type-sub').textContent = `佔比 ${topTypeRate}% (${topTypeCount.toLocaleString()} 台次)`;
+            } else {
+                document.getElementById('kpi-top-type-name').textContent = '--';
+                document.getElementById('kpi-top-type-sub').textContent = '無資料';
+            }
+
+            const datedPeriods = periods.filter(p => !p.isUndated);
+            document.getElementById('kpi-avg-label').textContent = isWeek ? '週均回流台次' : '月均回流台次';
+            document.getElementById('kpi-avg-unit').textContent = isWeek ? '台次 / 週' : '台次 / 月';
+            const avgPeriod = datedPeriods.length > 0 ? (datedRecords.length / datedPeriods.length).toFixed(1) : 0;
+            document.getElementById('kpi-avg-weekly').textContent = avgPeriod;
+
+            if (datedPeriods.length > 0) {
+                const latest = datedPeriods[datedPeriods.length - 1];
+                let wowTxt = '';
+                if (latest.wowChange !== null) {
+                    wowTxt = ` (${latest.wowChange >= 0 ? '+' : ''}${latest.wowChange.toFixed(1)}%)`;
+                }
+                document.getElementById('kpi-latest-week-sub').textContent = `最新 ${latest.periodKey}：${latest.visits} 台次${wowTxt}`;
+            } else {
+                document.getElementById('kpi-latest-week-sub').textContent = '最新一期：--';
+            }
+
+            const periodText = isWeek ? '每週' : '每月';
+            const dimText = state.stackDimension === 'branch' ? '依承接服務廠堆疊' : '依工單類別堆疊';
+            document.getElementById('trend-chart-title').textContent = `${periodText}原${state.targetBranch}車主回廠趨勢（${dimText}）`;
+
+            renderTrendChart(periods);
+            renderBranchDoughnutChart(branchTotals);
+            renderTypeBarChart(typeTotals);
+            renderPivotMatrixTable(hasPlate, hasAmount);
+            renderWeeklyDetailTable(periods, hasPlate, hasAmount);
+            applyRecordsSearch();
+        }
+
+        /**
+         * Render Stacked Trend Bar + Cumulative Line Chart
+         */
+        function renderTrendChart(periods) {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            if (state.charts.weekly) state.charts.weekly.destroy();
+
+            const labels = periods.map(p => p.isUndated ? ['未填日期', '待確認'] : [p.periodKey, p.compactLabel]);
+            const isBranchStack = state.stackDimension === 'branch';
+            const categories = isBranchStack ? state.branchList : state.typeList;
+            const palette = isBranchStack ? BRANCH_PALETTE : TYPE_PALETTE;
+
+            const datasets = categories.map((cat, idx) => ({
+                label: cat,
+                data: periods.map(p => (isBranchStack ? p.byBranch[cat] : p.byType[cat]) || 0),
+                backgroundColor: palette[idx % palette.length],
+                borderRadius: idx === categories.length - 1 ? { topLeft: 4, topRight: 4 } : 0,
+                barPercentage: 0.62,
+                stack: 'stack0',
+                order: 2
+            }));
+
+            datasets.push({
+                label: '累計回流台次',
+                data: periods.map(p => p.cumulative),
+                type: 'line',
+                borderColor: '#0f172a',
+                backgroundColor: '#0f172a',
+                borderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                tension: 0.25,
+                yAxisID: 'y1',
+                order: 1
+            });
+
+            state.charts.weekly = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.94)',
+                            padding: 12,
+                            cornerRadius: 10,
+                            callbacks: {
+                                title: (items) => {
+                                    const p = periods[items[0].dataIndex];
+                                    return p.isUndated ? '未填日期 / 待確認（無有效進廠日）' : `${p.periodKey} (${p.rangeLabel}) — 單期共 ${p.visits} 台次`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false },
+                            ticks: { font: { size: 11 }, color: '#475569' }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: { display: true, text: '當期台次', font: { size: 11 }, color: '#64748b' },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { precision: 0, font: { size: 11 } }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            title: { display: true, text: '累計台次', font: { size: 11 }, color: '#0f172a' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { precision: 0, font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Render Doughnut Chart: Receiving Service Branch Share
+         */
+        function renderBranchDoughnutChart(branchTotals) {
+            const ctx = document.getElementById('branchDoughnutChart').getContext('2d');
+            if (state.charts.branch) state.charts.branch.destroy();
+
+            const labels = state.branchList;
+            const values = labels.map(b => branchTotals[b]);
+            const total = values.reduce((a, b) => a + b, 0);
+
+            state.charts.branch = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: labels.map((_, i) => BRANCH_PALETTE[i % BRANCH_PALETTE.length]),
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '58%',
+                    onClick: (_, elements) => {
+                        if (elements.length > 0) {
+                            const clickedBranch = labels[elements[0].index];
+                            state.selectedBranchFilter = state.selectedBranchFilter === clickedBranch ? 'ALL' : clickedBranch;
+                            renderInteractiveFilterPills();
+                            runCrossFilteredAnalysis();
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { usePointStyle: true, padding: 12, font: { size: 11 } }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                            padding: 12,
+                            cornerRadius: 10,
+                            callbacks: {
+                                label: (context) => {
+                                    const val = context.parsed;
+                                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                    return ` ${context.label}: ${val} 台次 (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Render Horizontal Bar Chart: Work Order Category Distribution
+         */
+        function renderTypeBarChart(typeTotals) {
+            const ctx = document.getElementById('typeBarChart').getContext('2d');
+            if (state.charts.type) state.charts.type.destroy();
+
+            const labels = state.typeList;
+            const values = labels.map(t => typeTotals[t]);
+            const total = values.reduce((a, b) => a + b, 0);
+
+            state.charts.type = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: '工單台次',
+                        data: values,
+                        backgroundColor: labels.map((_, i) => TYPE_PALETTE[i % TYPE_PALETTE.length]),
+                        borderRadius: 6,
+                        barPercentage: 0.65
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (_, elements) => {
+                        if (elements.length > 0) {
+                            const clickedType = labels[elements[0].index];
+                            state.selectedTypeFilter = state.selectedTypeFilter === clickedType ? 'ALL' : clickedType;
+                            renderInteractiveFilterPills();
+                            runCrossFilteredAnalysis();
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                            padding: 12,
+                            cornerRadius: 10,
+                            callbacks: {
+                                label: (context) => {
+                                    const val = context.parsed.x;
+                                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                    return ` ${val} 台次 (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: { precision: 0, font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { font: { size: 11, weight: '600' }, color: '#334155' }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Render Cross Matrix Table: Receiving Branch x Work Order Type
+         */
+        function renderPivotMatrixTable(hasPlate, hasAmount) {
+            const thead = document.getElementById('pivot-matrix-head');
+            const tbody = document.getElementById('pivot-matrix-body');
+            const tfoot = document.getElementById('pivot-matrix-foot');
+
+            const types = state.typeList;
+            const totalAllVisits = state.filteredRecords.length;
+
+            thead.innerHTML = `
+                <tr class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                    <th class="py-3 px-4 font-semibold">承接服務廠別</th>
+                    ${types.map(t => `<th class="py-3 px-3 font-semibold text-right">${t}</th>`).join('')}
+                    <th class="py-3 px-4 font-semibold text-right bg-sky-50/70 text-sky-900">總承接台次</th>
+                    <th class="py-3 px-4 font-semibold text-right">分流佔比</th>
+                    ${hasPlate ? '<th class="py-3 px-4 font-semibold text-right">不重複車數</th>' : ''}
+                    ${hasAmount ? '<th class="py-3 px-4 font-semibold text-right">累計工單金額</th>' : ''}
+                </tr>
+            `;
+
+            tbody.innerHTML = '';
+            const colTotals = {};
+            types.forEach(t => { colTotals[t] = 0; });
+            let grandAmount = 0;
+            const grandPlates = new Set();
+
+            state.pivotRows.forEach((row, idx) => {
+                const sharePct = totalAllVisits > 0 ? ((row.totalVisits / totalAllVisits) * 100).toFixed(1) : '0.0';
+                row.plates.forEach(p => grandPlates.add(p));
+                grandAmount += row.totalAmount;
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-sky-50/50 transition-colors cursor-pointer';
+                tr.addEventListener('click', () => {
+                    state.selectedBranchFilter = state.selectedBranchFilter === row.branch ? 'ALL' : row.branch;
+                    renderInteractiveFilterPills();
+                    runCrossFilteredAnalysis();
+                });
+
+                const typeCellsHtml = types.map(t => {
+                    const cnt = row.typeCounts[t] || 0;
+                    colTotals[t] += cnt;
+                    return `<td class="py-3 px-3 text-right ${cnt > 0 ? 'text-slate-800 font-medium' : 'text-slate-300'}">${cnt > 0 ? cnt.toLocaleString() : '-'}</td>`;
+                }).join('');
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-slate-900 whitespace-nowrap flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${BRANCH_PALETTE[idx % BRANCH_PALETTE.length]}"></span>
+                        <span>${row.branch}</span>
+                    </td>
+                    ${typeCellsHtml}
+                    <td class="py-3 px-4 text-right font-bold text-sky-700 bg-sky-50/40">${row.totalVisits.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-right">
+                        <div class="inline-flex items-center justify-end gap-2">
+                            <div class="w-14 bg-slate-200 rounded-full h-1.5 hidden sm:block overflow-hidden">
+                                <div class="bg-sky-600 h-1.5 rounded-full" style="width: ${sharePct}%"></div>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-700 w-11 text-right">${sharePct}%</span>
+                        </div>
+                    </td>
+                    ${hasPlate ? `<td class="py-3 px-4 text-right text-slate-600">${row.plates.size.toLocaleString()}</td>` : ''}
+                    ${hasAmount ? `<td class="py-3 px-4 text-right text-slate-700">$${Math.round(row.totalAmount).toLocaleString()}</td>` : ''}
+                `;
+                tbody.appendChild(tr);
+            });
+
+            tfoot.innerHTML = `
+                <tr>
+                    <td class="py-3 px-4">總計 (${state.pivotRows.length} 廠)</td>
+                    ${types.map(t => `<td class="py-3 px-3 text-right">${colTotals[t].toLocaleString()}</td>`).join('')}
+                    <td class="py-3 px-4 text-right text-sky-800 bg-sky-100/60">${totalAllVisits.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-right">100.0%</td>
+                    ${hasPlate ? `<td class="py-3 px-4 text-right">${grandPlates.size.toLocaleString()}</td>` : ''}
+                    ${hasAmount ? `<td class="py-3 px-4 text-right">$${Math.round(grandAmount).toLocaleString()}</td>` : ''}
+                </tr>
+            `;
+        }
+
+        /**
+         * Render Weekly Breakdown Table (Dynamic Columns per Receiving Branch)
+         */
+        function renderWeeklyDetailTable(periods, hasPlate, hasAmount) {
+            const thead = document.getElementById('weekly-table-head');
+            const tbody = document.getElementById('weekly-table-body');
+            document.getElementById('tab-weekly-count').textContent = periods.length;
+
+            const topBranches = state.branchList.slice(0, 6);
+
+            thead.innerHTML = `
+                <tr class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                    <th class="py-3 px-4 font-semibold">週次 / 月份</th>
+                    <th class="py-3 px-4 font-semibold">日期區間</th>
+                    <th class="py-3 px-4 font-semibold text-right bg-sky-50/70 text-sky-900">總回流台次</th>
+                    ${topBranches.map(b => `<th class="py-3 px-3 font-semibold text-right">${b}</th>`).join('')}
+                    <th class="py-3 px-4 font-semibold text-right">前期增減</th>
+                    ${hasAmount ? '<th class="py-3 px-4 font-semibold text-right">工單總金額</th>' : ''}
+                </tr>
+            `;
+
+            tbody.innerHTML = '';
+            periods.forEach(p => {
+                let wowHtml = '<span class="text-slate-400">--</span>';
+                if (p.wowChange !== null) {
+                    const sign = p.wowChange >= 0 ? '+' : '';
+                    const badgeClass = p.wowChange > 0
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : (p.wowChange < 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200');
+                    wowHtml = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold border ${badgeClass}">${sign}${p.wowChange.toFixed(1)}%</span>`;
+                }
+
+                const branchCells = topBranches.map(b => {
+                    const cnt = p.byBranch[b] || 0;
+                    return `<td class="py-3 px-3 text-right ${cnt > 0 ? 'text-slate-700 font-medium' : 'text-slate-300'}">${cnt > 0 ? cnt : '-'}</td>`;
+                }).join('');
+
+                const tr = document.createElement('tr');
+                tr.className = p.isUndated ? 'bg-amber-50/50 hover:bg-amber-50 transition-colors' : 'hover:bg-slate-50/80 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold ${p.isUndated ? 'text-amber-800' : 'text-slate-800'} whitespace-nowrap">${p.periodKey}</td>
+                    <td class="py-3 px-4 ${p.isUndated ? 'text-amber-700 font-medium' : 'text-slate-500'} whitespace-nowrap">${p.rangeLabel}</td>
+                    <td class="py-3 px-4 text-right font-bold text-sky-700 bg-sky-50/30">${p.visits.toLocaleString()}</td>
+                    ${branchCells}
+                    <td class="py-3 px-4 text-right whitespace-nowrap">${wowHtml}</td>
+                    ${hasAmount ? `<td class="py-3 px-4 text-right text-slate-700 font-medium">$${Math.round(p.amount).toLocaleString()}</td>` : ''}
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        /**
+         * Render Filtered Vehicle Records Table
+         */
+        function applyRecordsSearch() {
+            const searchText = document.getElementById('record-search-input').value.trim().toLowerCase();
+            const hasAmount = Boolean(state.mapping.amount);
+
+            const displayList = state.filteredRecords.filter(r => {
+                if (state.onlyUndatedFilter && !r.isUndated) return false;
+                if (!searchText) return true;
+                return (
+                    r.plate.toLowerCase().includes(searchText) ||
+                    r.currBranch.toLowerCase().includes(searchText) ||
+                    r.orderType.toLowerCase().includes(searchText) ||
+                    r.dateStr.toLowerCase().includes(searchText) ||
+                    r.weekKey.toLowerCase().includes(searchText)
+                );
+            });
+
+            const tbody = document.getElementById('records-table-body');
+            const thAmount = document.getElementById('th-record-amount');
+            thAmount.classList.toggle('hidden', !hasAmount);
+            document.getElementById('tab-records-count').textContent = displayList.length;
+
+            tbody.innerHTML = '';
+            const slice = displayList.slice(0, 300);
+            slice.forEach((r, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = r.isUndated ? 'bg-amber-50/40 hover:bg-amber-50/80 transition-colors' : 'hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-2.5 px-4 text-slate-400 text-xs">${idx + 1}</td>
+                    <td class="py-2.5 px-4 font-medium ${r.isUndated ? 'text-amber-700 font-semibold' : 'text-slate-800'} whitespace-nowrap">${r.dateStr}</td>
+                    <td class="py-2.5 px-4 text-xs ${r.isUndated ? 'text-amber-700 font-semibold' : 'text-slate-500'} whitespace-nowrap">${r.weekKey}</td>
+                    <td class="py-2.5 px-4 font-mono font-semibold text-slate-800">${r.plate || '--'}</td>
+                    <td class="py-2.5 px-4 text-slate-500">${r.prevBranch}</td>
+                    <td class="py-2.5 px-4">
+                        <span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">${r.currBranch}</span>
+                    </td>
+                    <td class="py-2.5 px-4">
+                        <span class="px-2.5 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">${r.orderType}</span>
+                    </td>
+                    ${hasAmount ? `<td class="py-2.5 px-4 text-right text-slate-700">$${Math.round(r.amount).toLocaleString()}</td>` : ''}
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (displayList.length > 300) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="${hasAmount ? 8 : 7}" class="py-3 px-4 text-center text-xs text-slate-500 bg-slate-50">僅顯示前 300 筆資料（共 ${displayList.length} 筆），完整明細請點擊右上角「匯出分流分析報表」下載檢視。</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+
+        /**
+         * Load Specific Worksheet from Workbook
+         */
+        function loadSheet(sheetName, customHeaderIdx = null) {
+            state.currentSheet = sheetName;
+            const worksheet = state.workbook.Sheets[sheetName];
+            const grid = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+            state.rawGrid = grid;
+
+            if (!grid || grid.length === 0) {
+                showToast(`工作表「${sheetName}」沒有資料`, 'error');
+                return;
+            }
+
+            const headerIdx = customHeaderIdx !== null ? customHeaderIdx : detectHeaderRowIndex(grid);
+            state.headerRowIndex = headerIdx;
+
+            const { headers, rows } = extractTableFromGrid(grid, headerIdx);
+            state.headers = headers;
+            state.rawData = rows;
+
+            autoDetectColumns(headers);
+            populateMappingUI();
+            buildBaseRecords();
+        }
+
+        /**
+         * Handle File Upload (Excel / CSV)
+         */
+        function handleFile(file) {
+            if (!file) return;
+            state.fileName = file.name;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                    state.workbook = workbook;
+                    state.sheetNames = workbook.SheetNames;
+
+                    document.getElementById('drop-zone').classList.add('hidden');
+                    document.getElementById('file-info-bar').classList.remove('hidden');
+                    document.getElementById('file-name-display').textContent = file.name;
+
+                    loadSheet(workbook.SheetNames[0]);
+                } catch (err) {
+                    console.error(err);
+                    showToast('檔案讀取失敗，請確認檔案未損壞或未被密碼保護', 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * Load Realistic Sample Data aligned with Dealership Names & Work Order Categories (Total = 294)
+         */
+        function loadSampleData() {
+            const branchMatrix = [
+                { name: '九和忠孝廠', counts: { '引電': 108, '保險': 8, '索賠': 2, '鈑噴': 2 } },
+                { name: '九和內湖廠', counts: { '引電': 109, '保險': 5, '索賠': 4, '鈑噴': 1 } },
+                { name: '九和濱江廠', counts: { '引電': 41,  '保險': 0, '索賠': 0, '鈑噴': 0 } },
+                { name: '九和承德廠', counts: { '引電': 11,  '保險': 0, '索賠': 0, '鈑噴': 0 } },
+                { name: '九和莒光廠', counts: { '引電': 3,   '保險': 0, '索賠': 0, '鈑噴': 0 } }
+            ];
+
+            const typeAmounts = {
+                '引電': [2800, 9500],
+                '保險': [12000, 42000],
+                '索賠': [0, 2500],
+                '鈑噴': [8500, 35000]
+            };
+
+            const grid = [
+                ['070 - 工單進出廠動態表', '', '', '', '', '', '', ''],
+                ['查詢區間：115/09/07 ~ 115/11/29', '篩選條件：上次保養廠別 = 九和八堵廠 (撤廠追蹤)', '製表日期：115/11/25', '', '', '', '', ''],
+                ['序號', '工單號碼', '進廠日期', '牌照號碼', '上次保養廠別', '本次進廠廠別', '工單類別', '工單總金額']
+            ];
+
+            const baseDate = new Date(2026, 8, 7);
+            let seq = 1;
+            const platePrefixes = ['BFC', 'BGT', 'BKR', 'BLP', 'BMW', 'BQA'];
+
+            const allItems = [];
+            branchMatrix.forEach(b => {
+                Object.entries(b.counts).forEach(([tName, cnt]) => {
+                    for (let i = 0; i < cnt; i++) {
+                        allItems.push({ branch: b.name, type: tName });
+                    }
+                });
+            });
+
+            allItems.sort((a, b) => ((a.branch.length * 7 + a.type.length * 13) % 11) - ((b.branch.length * 5 + b.type.length * 17) % 11));
+
+            allItems.forEach((item, idx) => {
+                const w = idx % 12;
+                const dayOffset = (idx * 3) % 7;
+                const visitDate = new Date(baseDate);
+                visitDate.setDate(baseDate.getDate() + w * 7 + dayOffset);
+
+                const rocYear = visitDate.getFullYear() - 1911;
+                const mm = String(visitDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(visitDate.getDate()).padStart(2, '0');
+                const rocDateStr = idx >= allItems.length - 2 ? '' : `${rocYear}/${mm}/${dd}`;
+
+                const [minAmt, maxAmt] = typeAmounts[item.type];
+                const amount = minAmt + ((idx * 397) % (maxAmt - minAmt + 1));
+                const prefix = platePrefixes[idx % platePrefixes.length];
+                const num = String(1001 + ((idx * 29) % 8998));
+
+                grid.push([
+                    seq++,
+                    `WO115${String(w + 1).padStart(2, '0')}${String(idx + 1).padStart(3, '0')}`,
+                    rocDateStr,
+                    `${prefix}-${num}`,
+                    '九和八堵廠',
+                    item.branch,
+                    item.type,
+                    amount
+                ]);
+            });
+
+            grid.push([seq++, 'WO11599001', '115/11/20', '', '九和八堵廠', '九和忠孝廠', '引電', 0]);
+            grid.push([seq++, 'WO11599002', '115/11/21', '', '九和八堵廠', '九和內湖廠', '引電', 0]);
+            grid.push(['總計', '', '', '', '九和八堵廠', '', '', 0]);
+
+            const ws = XLSX.utils.aoa_to_sheet(grid);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '070_動態表');
+
+            state.workbook = wb;
+            state.sheetNames = wb.SheetNames;
+            state.fileName = '070 - 工單進出廠動態表(九和八堵廠撤廠追蹤294筆範例).xlsx';
+
+            document.getElementById('drop-zone').classList.add('hidden');
+            document.getElementById('file-info-bar').classList.remove('hidden');
+            document.getElementById('file-name-display').textContent = state.fileName;
+
+            loadSheet('070_動態表');
+        }
+
+        /**
+         * Export Multi-Sheet Excel Report
+         */
+        function exportAnalysisReport() {
+            if (!state.filteredRecords.length) return;
+
+            const wb = XLSX.utils.book_new();
+            const hasPlate = Boolean(state.mapping.plate);
+            const hasAmount = Boolean(state.mapping.amount);
+            const types = state.typeList;
+            const totalAll = state.filteredRecords.length;
+
+            // Sheet 1: Pivot Matrix (Branch x Work Order Type)
+            const pivotSheetData = state.pivotRows.map(row => {
+                const obj = { '承接服務廠別': row.branch };
+                types.forEach(t => {
+                    obj[t] = row.typeCounts[t] || 0;
+                });
+                obj['總承接台次'] = row.totalVisits;
+                obj['分流佔比(%)'] = totalAll > 0 ? Number(((row.totalVisits / totalAll) * 100).toFixed(1)) : 0;
+                if (hasPlate) obj['不重複車數'] = row.plates.size;
+                if (hasAmount) obj['累計工單金額'] = Math.round(row.totalAmount);
+                return obj;
+            });
+            const wsPivot = XLSX.utils.json_to_sheet(pivotSheetData);
+            XLSX.utils.book_append_sheet(wb, wsPivot, '1_廠別x工單類別交叉表');
+
+            // Sheet 2: Weekly / Monthly Breakdown
+            const periodSheetData = state.periodStats.map(p => {
+                const obj = {
+                    '週次/月份': p.periodKey,
+                    '日期區間': p.rangeLabel,
+                    '總回流台次': p.visits
+                };
+                state.branchList.forEach(b => {
+                    obj[b] = p.byBranch[b] || 0;
+                });
+                obj['前期增減(%)'] = p.wowChange !== null ? Number(p.wowChange.toFixed(1)) : '';
+                if (hasAmount) obj['工單總金額'] = Math.round(p.amount);
+                return obj;
+            });
+            const wsPeriod = XLSX.utils.json_to_sheet(periodSheetData);
+            XLSX.utils.book_append_sheet(wb, wsPeriod, '2_每週分流趨勢表');
+
+            // Sheet 3: Filtered Vehicle Records
+            const recordSheetData = state.filteredRecords.map((r, i) => {
+                const obj = {
+                    '序號': i + 1,
+                    '本次進廠日期': r.dateStr,
+                    '所屬週次': r.weekKey,
+                    '牌照號碼': r.plate,
+                    '上次保養廠別': r.prevBranch,
+                    '目前回廠廠別': r.currBranch,
+                    '工單類別': r.orderType
+                };
+                if (hasAmount) obj['工單金額'] = r.amount;
+                return obj;
+            });
+            const wsRecords = XLSX.utils.json_to_sheet(recordSheetData);
+            XLSX.utils.book_append_sheet(wb, wsRecords, '3_原八堵廠回流明細');
+
+            const dateStamp = formatDate(new Date()).replace(/\//g, '');
+            XLSX.writeFile(wb, `${state.targetBranch}廠撤廠分流與工單分析_${dateStamp}.xlsx`);
+            showToast('Excel 分析報表已成功匯出！', 'success');
+        }
+
+        /**
+         * Event Listeners Initialization
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            document.getElementById('btn-reupload').addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-sky-500', 'bg-sky-50');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('border-sky-500', 'bg-sky-50');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-sky-500', 'bg-sky-50');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            document.getElementById('btn-load-sample').addEventListener('click', loadSampleData);
+            document.getElementById('btn-export-excel').addEventListener('click', exportAnalysisReport);
+
+            document.getElementById('btn-toggle-mapping').addEventListener('click', () => {
+                document.getElementById('mapping-panel').classList.toggle('hidden');
+            });
+
+            document.getElementById('sheet-select').addEventListener('change', (e) => {
+                loadSheet(e.target.value);
+            });
+
+            const updateHeaderRowFromInput = (newRow1Based) => {
+                const clamped = Math.max(1, Math.min(state.rawGrid.length, newRow1Based));
+                document.getElementById('header-row-input').value = clamped;
+                loadSheet(state.currentSheet, clamped - 1);
+            };
+
+            document.getElementById('btn-header-row-dec').addEventListener('click', () => {
+                const cur = parseInt(document.getElementById('header-row-input').value, 10) || 1;
+                updateHeaderRowFromInput(cur - 1);
+            });
+
+            document.getElementById('btn-header-row-inc').addEventListener('click', () => {
+                const cur = parseInt(document.getElementById('header-row-input').value, 10) || 1;
+                updateHeaderRowFromInput(cur + 1);
+            });
+
+            document.getElementById('header-row-input').addEventListener('change', (e) => {
+                const val = parseInt(e.target.value, 10) || 1;
+                updateHeaderRowFromInput(val);
+            });
+
+            document.getElementById('map-prev-branch').addEventListener('change', (e) => {
+                state.mapping.prevBranch = e.target.value;
+                updateDetectedBranchesDropdown();
+            });
+
+            document.getElementById('btn-apply-mapping').addEventListener('click', () => {
+                state.mapping.prevBranch = document.getElementById('map-prev-branch').value;
+                state.mapping.returnDate = document.getElementById('map-return-date').value;
+                state.mapping.currBranch = document.getElementById('map-curr-branch').value;
+                state.mapping.orderType = document.getElementById('map-order-type').value;
+                state.mapping.plate = document.getElementById('map-plate').value;
+                state.mapping.amount = document.getElementById('map-amount').value;
+                buildBaseRecords();
+            });
+
+            document.getElementById('detected-branches-select').addEventListener('change', (e) => {
+                if (e.target.value) {
+                    document.getElementById('target-branch-input').value = e.target.value;
+                    if (state.rawData.length > 0) buildBaseRecords();
+                }
+            });
+
+            document.getElementById('target-branch-input').addEventListener('change', () => {
+                if (state.rawData.length > 0) buildBaseRecords();
+            });
+
+            document.getElementById('btn-reset-cross-filters').addEventListener('click', () => {
+                state.selectedBranchFilter = 'ALL';
+                state.selectedTypeFilter = 'ALL';
+                renderInteractiveFilterPills();
+                runCrossFilteredAnalysis();
+            });
+
+            // Stack Dimension Switcher (Branch vs Work Order Type)
+            const btnStackBranch = document.getElementById('btn-stack-branch');
+            const btnStackType = document.getElementById('btn-stack-type');
+
+            btnStackBranch.addEventListener('click', () => {
+                state.stackDimension = 'branch';
+                btnStackBranch.className = 'px-2.5 py-1 rounded-md bg-white text-sky-700 shadow-xs font-semibold transition cursor-pointer';
+                btnStackType.className = 'px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer';
+                runCrossFilteredAnalysis();
+            });
+
+            btnStackType.addEventListener('click', () => {
+                state.stackDimension = 'type';
+                btnStackType.className = 'px-2.5 py-1 rounded-md bg-white text-sky-700 shadow-xs font-semibold transition cursor-pointer';
+                btnStackBranch.className = 'px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer';
+                runCrossFilteredAnalysis();
+            });
+
+            // Period Mode Switcher (Week vs Month)
+            const btnWeek = document.getElementById('btn-period-week');
+            const btnMonth = document.getElementById('btn-period-month');
+
+            btnWeek.addEventListener('click', () => {
+                state.periodMode = 'week';
+                btnWeek.className = 'px-2.5 py-1 rounded-md bg-white text-slate-800 shadow-xs font-semibold transition cursor-pointer';
+                btnMonth.className = 'px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer';
+                runCrossFilteredAnalysis();
+            });
+
+            btnMonth.addEventListener('click', () => {
+                state.periodMode = 'month';
+                btnMonth.className = 'px-2.5 py-1 rounded-md bg-white text-slate-800 shadow-xs font-semibold transition cursor-pointer';
+                btnWeek.className = 'px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer';
+                runCrossFilteredAnalysis();
+            });
+
+            // Tabs Switching
+            const tabWeekly = document.getElementById('tab-weekly');
+            const tabRecords = document.getElementById('tab-records');
+            const panelWeekly = document.getElementById('panel-weekly');
+            const panelRecords = document.getElementById('panel-records');
+            const recordsFilterBar = document.getElementById('records-filter-bar');
+
+            tabWeekly.addEventListener('click', () => {
+                tabWeekly.classList.add('border-sky-600', 'text-sky-700', 'font-bold');
+                tabWeekly.classList.remove('border-transparent', 'text-slate-500', 'font-medium');
+                tabRecords.classList.remove('border-sky-600', 'text-sky-700', 'font-bold');
+                tabRecords.classList.add('border-transparent', 'text-slate-500', 'font-medium');
+
+                panelWeekly.classList.remove('hidden');
+                panelRecords.classList.add('hidden');
+                recordsFilterBar.classList.add('hidden');
+            });
+
+            tabRecords.addEventListener('click', () => {
+                tabRecords.classList.add('border-sky-600', 'text-sky-700', 'font-bold');
+                tabRecords.classList.remove('border-transparent', 'text-slate-500', 'font-medium');
+                tabWeekly.classList.remove('border-sky-600', 'text-sky-700', 'font-bold');
+                tabWeekly.classList.add('border-transparent', 'text-slate-500', 'font-medium');
+
+                panelRecords.classList.remove('hidden');
+                panelWeekly.classList.add('hidden');
+                recordsFilterBar.classList.remove('hidden');
+            });
+
+            document.getElementById('record-search-input').addEventListener('input', applyRecordsSearch);
+
+            // Audit Banner Inspection Buttons & Modal Controls
+            const btnToggleUndatedOnly = document.getElementById('btn-toggle-undated-only');
+            const updateUndatedButtonStyle = () => {
+                if (state.onlyUndatedFilter) {
+                    btnToggleUndatedOnly.className = 'text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-500 bg-amber-500 text-white transition cursor-pointer';
+                    btnToggleUndatedOnly.textContent = '顯示全部明細';
+                } else {
+                    btnToggleUndatedOnly.className = 'text-xs font-medium px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition cursor-pointer';
+                    btnToggleUndatedOnly.textContent = '僅看未填日期';
+                }
+            };
+
+            btnToggleUndatedOnly.addEventListener('click', () => {
+                state.onlyUndatedFilter = !state.onlyUndatedFilter;
+                updateUndatedButtonStyle();
+                applyRecordsSearch();
+            });
+
+            document.getElementById('btn-inspect-undated').addEventListener('click', () => {
+                state.onlyUndatedFilter = true;
+                updateUndatedButtonStyle();
+                tabRecords.click();
+                applyRecordsSearch();
+                document.getElementById('panel-records').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+
+            const auditModal = document.getElementById('audit-modal');
+            document.getElementById('btn-inspect-excluded').addEventListener('click', () => {
+                const tbody = document.getElementById('audit-modal-tbody');
+                tbody.innerHTML = '';
+                state.excludedRows.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-50';
+                    tr.innerHTML = `
+                        <td class="py-2.5 px-4 font-mono text-slate-500">第 ${item.excelRowNum} 列</td>
+                        <td class="py-2.5 px-4"><span class="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-medium">${item.reason}</span></td>
+                        <td class="py-2.5 px-4 text-slate-400">${item.plate}</td>
+                        <td class="py-2.5 px-4 text-slate-700">${item.prevBranch}</td>
+                        <td class="py-2.5 px-4 text-slate-700">${item.currBranch}</td>
+                        <td class="py-2.5 px-4 text-slate-700">${item.orderType}</td>
+                        <td class="py-2.5 px-4 text-slate-500">${item.dateStr}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                auditModal.classList.remove('hidden');
+            });
+
+            const closeAuditModal = () => auditModal.classList.add('hidden');
+            document.getElementById('btn-close-audit-modal').addEventListener('click', closeAuditModal);
+            document.getElementById('btn-confirm-audit-modal').addEventListener('click', closeAuditModal);
+            auditModal.addEventListener('click', (e) => {
+                if (e.target === auditModal) closeAuditModal();
+            });
+        });
+    </script>
+</body>
+</html>
