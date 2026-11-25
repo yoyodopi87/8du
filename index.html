@@ -647,7 +647,6 @@
         }
 
         function getWeekBucket(d) {
-            // Monday as start of week
             const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
             const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon...
             const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -699,7 +698,7 @@
                 const row = grid[r];
                 if (!Array.isArray(row)) continue;
                 const nonEmpty = row.map(c => cleanStr(c)).filter(Boolean);
-                if (nonEmpty.length < 3) continue; // Skip title banners or empty lines
+                if (nonEmpty.length < 3) continue;
 
                 let score = nonEmpty.length * 0.5;
                 nonEmpty.forEach(cell => {
@@ -768,17 +767,15 @@
             const nameCounts = {};
             const headers = [];
 
-            rawRow.forEach((cell, colIdx) => {
+            rawRow.forEach((cell) => {
                 const base = cleanStr(cell);
                 if (!base) return;
                 nameCounts[base] = (nameCounts[base] || 0) + 1;
             });
 
-            const seenCounts = {};
             rawRow.forEach((cell, colIdx) => {
                 const base = cleanStr(cell);
                 if (!base) return;
-                seenCounts[base] = (seenCounts[base] || 0) + 1;
                 const label = nameCounts[base] > 1 ? `${base} (欄${colIndexToLetter(colIdx)})` : base;
                 headers.push({ label, base, colIdx });
             });
@@ -788,7 +785,6 @@
             document.getElementById('detected-headers-preview').textContent =
                 headers.length > 0 ? headers.map(h => h.label).join(' ｜ ') : '此列未偵測到有效欄位名稱，請調整列號';
 
-            // Populate mapping dropdowns
             const mapIds = ['map-prev-branch', 'map-curr-branch', 'map-order-type', 'map-date', 'map-plate', 'map-amount'];
             mapIds.forEach(id => {
                 const sel = document.getElementById(id);
@@ -801,7 +797,6 @@
                 });
             });
 
-            // Auto-match columns by priority keywords
             const findCol = (patterns, excludePatterns = []) => {
                 for (const pat of patterns) {
                     const found = headers.find(h =>
@@ -901,7 +896,6 @@
             const targetBranch = state.targetBranch;
             const branchDisplayName = targetBranch.includes('廠') ? targetBranch : `${targetBranch}廠`;
 
-            // Update dynamic headings with exact target branch name
             document.getElementById('header-main-title').textContent = `${branchDisplayName}撤廠車主分流與工單類別追蹤儀表板`;
             document.getElementById('kpi-card1-title').textContent = `原${branchDisplayName}回流總台次`;
             document.getElementById('report-main-title').textContent = `原${branchDisplayName}撤廠車主回流追蹤 — 管理層總結分析報告`;
@@ -917,17 +911,14 @@
                 const prevVal = cleanStr(row[prevCol.colIdx]);
                 if (!prevVal) continue;
 
-                // Filter out summary/total rows
                 if (/^(總計|合計|小計|total|subtotal)/i.test(prevVal)) {
                     excludedRows.push({ rowNum: r + 1, reason: '報表合計/小計列', prevBranch: prevVal, plate: '' });
                     continue;
                 }
 
-                // Match target source branch
                 if (prevVal !== targetBranch) continue;
 
                 const plateVal = plateCol ? cleanStr(row[plateCol.colIdx]) : `ROW_${r + 1}`;
-                // Pivot Table Alignment: "計數 - 牌照號碼" skips blank plates
                 if (plateCol && (!plateVal || /^(總計|合計|小計|-)$/i.test(plateVal))) {
                     excludedRows.push({
                         rowNum: r + 1,
@@ -964,7 +955,6 @@
                 }
             }
 
-            // Sort chronologically (undated at the end)
             validRecords.sort((a, b) => {
                 if (a.isUndated && b.isUndated) return a.rowNum - b.rowNum;
                 if (a.isUndated) return 1;
@@ -978,7 +968,6 @@
             state.selectedBranchFilter = 'ALL';
             state.selectedTypeFilter = 'ALL';
 
-            // Update Audit Strip
             document.getElementById('audit-summary-text').textContent =
                 `有效牌照工單共 ${validRecords.length.toLocaleString()} 筆（已排除無車牌/合計列 ${excludedRows.length} 筆；其中未填日期 ${undatedRows.length} 筆仍計入總數）`;
 
@@ -1002,7 +991,6 @@
             const sortedBranches = Object.keys(branchCounts).sort((a, b) => branchCounts[b] - branchCounts[a]);
             const sortedTypes = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a]);
 
-            // Branch pills
             const makePill = (label, count, isActive, onClick) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -1027,7 +1015,6 @@
                 }));
             });
 
-            // Type pills
             typeContainer.appendChild(makePill('全部工單類別', state.allValidRecords.length, state.selectedTypeFilter === 'ALL', () => {
                 state.selectedTypeFilter = 'ALL';
                 renderFilterPills();
@@ -1072,7 +1059,6 @@
             const uniqueCars = hasPlate ? uniquePlates.size : totalVisits;
             const totalAmount = records.reduce((sum, r) => sum + r.amount, 0);
 
-            // Global Type List sorted by total frequency
             const globalTypeTotals = {};
             records.forEach(r => {
                 globalTypeTotals[r.orderType] = (globalTypeTotals[r.orderType] || 0) + 1;
@@ -1080,7 +1066,6 @@
             const typeList = Object.keys(globalTypeTotals).sort((a, b) => globalTypeTotals[b] - globalTypeTotals[a]);
             state.typeList = typeList;
 
-            // Pivot Rows grouped by Current Receiving Branch
             const branchMap = {};
             records.forEach(r => {
                 if (!branchMap[r.currBranch]) {
@@ -1102,7 +1087,6 @@
             const pivotRows = Object.values(branchMap).sort((a, b) => b.totalVisits - a.totalVisits);
             state.pivotRows = pivotRows;
 
-            // Weekly / Monthly Bucket Aggregation
             const bucketMap = {};
             records.forEach(r => {
                 let bKey, bLabel, bShort;
@@ -1200,16 +1184,13 @@
                     : '目前無工單類別資料。';
             }
 
-            // Render Charts
             renderWeeklyChart(weeklyStats, pivotRows, typeList, branchDisplayName);
             renderBranchDoughnutChart(pivotRows, totalVisits);
             renderTypeBarChart(typeList, globalTypeTotals, totalVisits);
 
-            // Render Tables
             renderPivotTable(pivotRows, typeList, totalVisits, hasPlate, hasAmount);
             renderWeeklyTable(weeklyStats);
 
-            // Generate Management Executive Summary Narrative
             generateManagementReport(branchDisplayName, records, pivotRows, typeList, globalTypeTotals, datedBuckets, uniqueCars, totalAmount, hasAmount);
         }
 
@@ -1219,7 +1200,6 @@
             document.getElementById('trend-chart-title').textContent =
                 `原${branchDisplayName}車主${periodLabel}回流趨勢（按${stackByBranch ? '承接廠別' : '工單類別'}堆疊）`;
 
-            // Dynamic Trend Insight
             const dated = weeklyStats.filter(w => !w.isUndated);
             const trendInsightEl = document.getElementById('trend-chart-insight');
             if (dated.length >= 2) {
@@ -1406,7 +1386,6 @@
             const tbody = document.getElementById('pivot-table-body');
             const tfoot = document.getElementById('pivot-table-foot');
 
-            // Insight for Cross Matrix
             const matrixInsight = document.getElementById('pivot-matrix-insight');
             if (pivotRows.length > 0 && typeList.length > 0) {
                 const highValueTypes = typeList.filter(t => /鈑|噴|保|索/.test(t));
@@ -1425,7 +1404,6 @@
                 }
             }
 
-            // Header
             let headHtml = `<tr><th class="py-3 px-4 font-bold">承接服務廠別</th>`;
             typeList.forEach(t => {
                 headHtml += `<th class="py-3 px-3 text-right font-bold">${t}</th>`;
@@ -1437,7 +1415,6 @@
             headHtml += `</tr>`;
             thead.innerHTML = headHtml;
 
-            // Body
             tbody.innerHTML = '';
             const colTotals = {};
             typeList.forEach(t => { colTotals[t] = 0; });
@@ -1472,7 +1449,6 @@
                 tbody.appendChild(tr);
             });
 
-            // Footer Total
             let footHtml = `<tr><td class="py-3 px-4">總計 (${pivotRows.length} 個承接廠)</td>`;
             typeList.forEach(t => {
                 footHtml += `<td class="py-3 px-3 text-right">${colTotals[t].toLocaleString()}</td>`;
@@ -1523,10 +1499,8 @@
                 : '全期間資料';
             const avgFreq = uniqueCars > 0 ? (totalVisits / uniqueCars).toFixed(2) : '0.00';
 
-            // Section 1
             const sec1 = `截至目前統計區間（${dateRange}），原${branchDisplayName}撤廠後共有 ${uniqueCars.toLocaleString()} 輛車主成功導流回廠，累計產生 ${totalVisits.toLocaleString()} 台次有效服務工單，單車平均回廠頻次達 ${avgFreq} 次，整體客戶留存與轉廠銜接表現穩健。`;
 
-            // Section 2
             let sec2 = '尚無分流統計資料。';
             if (pivotRows.length > 0 && totalVisits > 0) {
                 const topBranchesDesc = pivotRows.slice(0, 3).map((p, idx) =>
@@ -1538,7 +1512,6 @@
                 sec2 = `在各兄弟服務廠吸收動能方面，共計 ${pivotRows.length} 個據點承接原${branchDisplayName}客群，其中${topBranchesDesc}。前兩大主力服務廠合計承接了 ${top2Share}% 的回流台次，為區域客戶分流的核心支柱。`;
             }
 
-            // Section 3
             let sec3 = '尚無工單結構統計資料。';
             if (typeList.length > 0 && totalVisits > 0) {
                 const typeBreakdown = typeList.map(t =>
@@ -1550,7 +1523,6 @@
                 sec3 = `回流工單結構分布為：${typeBreakdown}${revenuePart}顯示除基礎定期保養與一般維修外，車主亦願意在承接廠進行高黏著度之專案維修。`;
             }
 
-            // Section 4
             let sec4 = '建議持續透過每週報表監控各廠承接進度。';
             if (datedBuckets.length >= 2) {
                 const latest = datedBuckets[datedBuckets.length - 1];
@@ -1619,7 +1591,6 @@
             const branchDisplayName = state.targetBranch.includes('廠') ? state.targetBranch : `${state.targetBranch}廠`;
             const wb = XLSX.utils.book_new();
 
-            // Sheet 1: Management Executive Report
             const reportSheetData = [
                 [`${branchDisplayName}撤廠車主分流與工單類別追蹤 — 管理層總結分析報告`],
                 [`製表日期：${formatDate(new Date())}`, `篩選來源廠別：${state.targetBranch}`, `總有效台次：${state.filteredRecords.length}`],
@@ -1634,7 +1605,6 @@
             wsReport['!cols'] = [{ wch: 28 }, { wch: 95 }];
             XLSX.utils.book_append_sheet(wb, wsReport, '1_管理層總結報告');
 
-            // Sheet 2: Cross Matrix (Service Branch x Work Order Type)
             const types = state.typeList;
             const totalVisits = state.filteredRecords.length;
             const matrixHeader = ['承接服務廠別', ...types, '總承接台次', '分流佔比(%)', '不重複車數', '累計工單金額'];
@@ -1653,7 +1623,6 @@
             const wsMatrix = XLSX.utils.aoa_to_sheet(matrixRows);
             XLSX.utils.book_append_sheet(wb, wsMatrix, '2_廠別x工單類別交叉表');
 
-            // Sheet 3: Weekly Trend
             const weeklyHeader = ['統計週次區間', '當週回流台次', '累計回流台次', '不重複車數', '週增減台次', '主要承接廠'];
             const weeklyRows = [weeklyHeader];
             state.weeklyStats.forEach(w => {
@@ -1669,7 +1638,6 @@
             const wsWeekly = XLSX.utils.aoa_to_sheet(weeklyRows);
             XLSX.utils.book_append_sheet(wb, wsWeekly, '3_每週分流趨勢表');
 
-            // Sheet 4: Detailed Records
             const detailHeader = ['原始列號', '上次保養廠別', '本次承接服務廠', '工單類別', '牌照號碼', '進廠日期', '工單金額'];
             const detailRows = [detailHeader];
             state.filteredRecords.forEach(r => {
@@ -1709,136 +1677,144 @@
 
             try {
                 const pptx = new PptxGenJS();
-                pptx.layout = 'LAYOUT_16x9';
+                pptx.defineLayout({ name: 'CUSTOM_16_9', width: 13.333, height: 7.5 });
+                pptx.layout = 'CUSTOM_16_9';
                 pptx.author = '服務廠營運分析系統';
                 pptx.subject = '撤廠車主分流與工單類別追蹤報告';
 
                 const FONT_FACE = 'Microsoft JhengHei';
                 const branchDisplayName = state.targetBranch.includes('廠') ? state.targetBranch : `${state.targetBranch}廠`;
-                const totalVisits = state.filteredRecords.length;
-                const hasPlate = Boolean(state.mapping.plate);
-                const hasAmount = Boolean(state.mapping.amount);
-                const uniqueCars = hasPlate ? new Set(state.filteredRecords.map(r => r.plate).filter(Boolean)).size : totalVisits;
-                const totalAmount = state.filteredRecords.reduce((s, r) => s + r.amount, 0);
-                const datedRecords = state.filteredRecords.filter(r => !r.isUndated);
-                const dateRangeStr = datedRecords.length > 0
-                    ? `${datedRecords[0].dateStr} ~ ${datedRecords[datedRecords.length - 1].dateStr}`
-                    : '全期間資料';
                 const reportDateStr = formatDate(new Date());
-
-                const filterTags = [];
-                if (state.selectedBranchFilter !== 'ALL') filterTags.push(`承接廠：${state.selectedBranchFilter}`);
-                if (state.selectedTypeFilter !== 'ALL') filterTags.push(`工單類別：${state.selectedTypeFilter}`);
-                const filterSubtitle = filterTags.length > 0 ? `篩選條件：${filterTags.join(' ｜ ')}` : '全承接廠 × 全工單類別彙總';
+                const datedBuckets = state.weeklyStats.filter(w => !w.isUndated);
+                const dateRangeText = datedBuckets.length > 0
+                    ? `${datedBuckets[0].shortLabel} ～ ${datedBuckets[datedBuckets.length - 1].shortLabel}`
+                    : '全期間有效資料';
 
                 const addSlideChrome = (slide, titleText, subText, pageNum) => {
                     slide.background = { color: 'F8FAFC' };
-                    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.08, fill: { color: '0284C7' } });
+                    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.333, h: 0.08, fill: { color: '0284C7' } });
                     slide.addText(titleText, {
-                        x: 0.6, y: 0.3, w: 10.5, h: 0.45,
-                        fontFace: FONT_FACE, fontSize: 22, bold: true, color: '0F172A'
+                        x: 0.55, y: 0.25, w: 12.2, h: 0.45,
+                        fontFace: FONT_FACE, fontSize: 21, bold: true, color: '0F172A'
                     });
                     slide.addText(subText, {
-                        x: 0.6, y: 0.75, w: 11.5, h: 0.3,
+                        x: 0.55, y: 0.72, w: 12.2, h: 0.28,
                         fontFace: FONT_FACE, fontSize: 11, color: '64748B'
                     });
                     slide.addText(`原${branchDisplayName}撤廠追蹤報告  |  製表日期：${reportDateStr}  |  P.${pageNum}`, {
-                        x: 0.6, y: 7.12, w: 12.1, h: 0.25,
+                        x: 0.55, y: 7.15, w: 12.2, h: 0.25,
                         fontFace: FONT_FACE, fontSize: 9, color: '94A3B8', align: 'right'
+                    });
+                };
+
+                // Fit canvas image proportionally inside bounding box without cropping
+                const addFitCanvasImage = (slide, canvasId, boxX, boxY, boxW, boxH) => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas || !canvas.width || !canvas.height) return;
+                    const ratio = canvas.width / canvas.height;
+                    let drawW = boxW;
+                    let drawH = boxW / ratio;
+                    if (drawH > boxH) {
+                        drawH = boxH;
+                        drawW = boxH * ratio;
+                    }
+                    const offsetX = boxX + (boxW - drawW) / 2;
+                    const offsetY = boxY + (boxH - drawH) / 2;
+                    slide.addImage({
+                        data: canvas.toDataURL('image/png', 1.0),
+                        x: offsetX,
+                        y: offsetY,
+                        w: drawW,
+                        h: drawH
                     });
                 };
 
                 // SLIDE 1: Cover Slide
                 const slide1 = pptx.addSlide();
                 slide1.background = { color: '0F172A' };
-                slide1.addShape(pptx.ShapeType.rect, { x: 0.8, y: 1.5, w: 1.1, h: 0.08, fill: { color: '38BDF8' } });
-                slide1.addText('服務廠營運追蹤專題報告', {
-                    x: 0.8, y: 1.75, w: 10, h: 0.4,
-                    fontFace: FONT_FACE, fontSize: 16, bold: true, color: '38BDF8'
+                slide1.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.32, h: 7.5, fill: { color: '0284C7' } });
+                slide1.addShape(pptx.ShapeType.rect, { x: 0.32, y: 0, w: 0.1, h: 7.5, fill: { color: '38BDF8' } });
+
+                slide1.addText('SERVICE NETWORK RETENTION & WORK ORDER ANALYTICS', {
+                    x: 1.05, y: 1.55, w: 11.2, h: 0.35,
+                    fontFace: 'Arial', fontSize: 11, bold: true, color: '38BDF8', charSpacing: 2
                 });
-                slide1.addText(`原${branchDisplayName}撤廠車主\n分流去向與工單類別分析`, {
-                    x: 0.8, y: 2.3, w: 11.2, h: 1.8,
-                    fontFace: FONT_FACE, fontSize: 40, bold: true, color: 'FFFFFF', lineSpacingMultiple: 1.2
+                slide1.addText(`${branchDisplayName}撤廠車主分流\n與工單類別追蹤報告`, {
+                    x: 1.05, y: 2.05, w: 11.2, h: 1.85,
+                    fontFace: FONT_FACE, fontSize: 38, bold: true, color: 'FFFFFF', lineSpacingMultiple: 1.15
                 });
+                slide1.addShape(pptx.ShapeType.rect, { x: 1.05, y: 4.15, w: 2.4, h: 0.06, fill: { color: '38BDF8' } });
+
                 slide1.addText([
-                    { text: `統計資料區間：${dateRangeStr}\n`, options: { fontSize: 14, color: 'CBD5E1' } },
-                    { text: `分析口徑說明：${filterSubtitle}（對齊樞紐「計數 - 牌照號碼」共 ${totalVisits.toLocaleString()} 台次）\n`, options: { fontSize: 13, color: '94A3B8' } },
-                    { text: `報告產出日期：${reportDateStr}`, options: { fontSize: 13, color: '94A3B8' } }
+                    { text: `追蹤來源廠別：原 ${state.targetBranch}\n`, options: { fontSize: 15, color: 'E2E8F0', bold: true } },
+                    { text: `統計資料區間：${dateRangeText}\n`, options: { fontSize: 13.5, color: 'CBD5E1' } },
+                    { text: `資料統計口徑：100% 對齊 Excel 樞紐分析表（計數 - 牌照號碼，共 ${state.filteredRecords.length} 台次）\n`, options: { fontSize: 13.5, color: 'CBD5E1' } },
+                    { text: `報告產出日期：${reportDateStr}`, options: { fontSize: 13.5, color: '94A3B8' } }
                 ], {
-                    x: 0.8, y: 4.5, w: 11, h: 1.6,
+                    x: 1.05, y: 4.5, w: 11.2, h: 2.1,
                     fontFace: FONT_FACE, lineSpacingMultiple: 1.4
                 });
 
-                // SLIDE 2: Core KPIs & Key Findings
+                // SLIDE 2: Executive KPIs
                 const slide2 = pptx.addSlide();
-                addSlideChrome(slide2, '一、整體回流概況與核心指標摘要', `追蹤原${branchDisplayName}客戶轉廠後之整體承接規模與主力分流表現`, 2);
-
-                const topBranch = state.pivotRows[0] ? state.pivotRows[0].branch : '--';
-                const topBranchVisits = state.pivotRows[0] ? state.pivotRows[0].totalVisits : 0;
-                const topBranchPct = totalVisits > 0 ? ((topBranchVisits / totalVisits) * 100).toFixed(1) : '0.0';
-
-                const topType = state.typeList[0] || '--';
-                const topTypeVisits = state.filteredRecords.filter(r => r.orderType === topType).length;
-                const topTypePct = totalVisits > 0 ? ((topTypeVisits / totalVisits) * 100).toFixed(1) : '0.0';
+                addSlideChrome(slide2, '一、整體回流概況與核心營運指標', `追蹤原${branchDisplayName}車主轉廠回流總量、單車回訪頻次與主力承接據點`, 2);
 
                 const kpiCards = [
                     {
-                        label: `原${branchDisplayName}回流總台次`,
-                        val: `${totalVisits.toLocaleString()} 台次`,
+                        label: document.getElementById('kpi-card1-title').textContent,
+                        val: document.getElementById('kpi-total-visits').textContent,
                         sub: document.getElementById('kpi-card1-insight').textContent,
                         accent: '0284C7'
                     },
                     {
                         label: '不重複回流車輛數',
-                        val: `${uniqueCars.toLocaleString()} 輛車`,
+                        val: document.getElementById('kpi-unique-cars').textContent,
                         sub: document.getElementById('kpi-card2-insight').textContent,
                         accent: '4F46E5'
                     },
                     {
                         label: '最大承接兄弟服務廠',
-                        val: topBranch,
-                        sub: `承接 ${topBranchVisits} 台次（佔整體 ${topBranchPct}%）`,
+                        val: document.getElementById('kpi-top-branch').textContent,
+                        sub: document.getElementById('kpi-card3-insight').textContent,
                         accent: 'D97706'
                     },
                     {
-                        label: hasAmount && totalAmount > 0 ? '工單總金額 / 客單價' : '主力回廠工單類別',
-                        val: hasAmount && totalAmount > 0 ? `$${Math.round(totalAmount).toLocaleString()}` : topType,
-                        sub: hasAmount && totalAmount > 0
-                            ? `平均客單價 $${Math.round(totalAmount / totalVisits).toLocaleString()} 元（${topType}佔 ${topTypePct}%）`
-                            : `共 ${topTypeVisits} 台次（佔整體 ${topTypePct}%）`,
+                        label: document.getElementById('kpi-card4-title').textContent,
+                        val: document.getElementById('kpi-card4-value').textContent,
+                        sub: document.getElementById('kpi-card4-insight').textContent,
                         accent: '059669'
                     }
                 ];
 
                 kpiCards.forEach((card, i) => {
-                    const xPos = 0.6 + i * 3.08;
+                    const xPos = 0.55 + i * 3.1;
                     slide2.addShape(pptx.ShapeType.rect, {
-                        x: xPos, y: 1.3, w: 2.88, h: 2.35,
+                        x: xPos, y: 1.25, w: 2.93, h: 2.35,
                         fill: { color: 'FFFFFF' }, line: { color: 'E2E8F0', width: 1 }
                     });
                     slide2.addShape(pptx.ShapeType.rect, {
-                        x: xPos, y: 1.3, w: 2.88, h: 0.07, fill: { color: card.accent }
+                        x: xPos, y: 1.25, w: 2.93, h: 0.07, fill: { color: card.accent }
                     });
                     slide2.addText(card.label, {
-                        x: xPos + 0.18, y: 1.48, w: 2.52, h: 0.3,
+                        x: xPos + 0.16, y: 1.42, w: 2.6, h: 0.3,
                         fontFace: FONT_FACE, fontSize: 11, bold: true, color: '64748B'
                     });
                     slide2.addText(card.val, {
-                        x: xPos + 0.18, y: 1.85, w: 2.52, h: 0.55,
-                        fontFace: FONT_FACE, fontSize: 22, bold: true, color: '0F172A'
+                        x: xPos + 0.16, y: 1.8, w: 2.6, h: 0.52,
+                        fontFace: FONT_FACE, fontSize: 21, bold: true, color: '0F172A'
                     });
                     slide2.addText(card.sub, {
-                        x: xPos + 0.18, y: 2.5, w: 2.52, h: 1.0,
-                        fontFace: FONT_FACE, fontSize: 10, color: '475569', valign: 'top'
+                        x: xPos + 0.16, y: 2.42, w: 2.6, h: 1.05,
+                        fontFace: FONT_FACE, fontSize: 9.8, color: '475569', valign: 'top'
                     });
                 });
 
                 slide2.addShape(pptx.ShapeType.rect, {
-                    x: 0.6, y: 3.95, w: 12.13, h: 2.9,
+                    x: 0.55, y: 3.85, w: 12.23, h: 3.05,
                     fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }
                 });
                 slide2.addText('關鍵管理洞察摘要', {
-                    x: 0.85, y: 4.1, w: 11.6, h: 0.35,
+                    x: 0.8, y: 4.02, w: 11.7, h: 0.35,
                     fontFace: FONT_FACE, fontSize: 14, bold: true, color: '0284C7'
                 });
                 const sec1Clean = document.getElementById('report-sec-1').textContent;
@@ -1847,7 +1823,7 @@
                     { text: `• 整體回流概況：${sec1Clean}\n\n`, options: { fontSize: 11.5, color: '1E293B' } },
                     { text: `• 分流吸收表現：${sec2Clean}`, options: { fontSize: 11.5, color: '1E293B' } }
                 ], {
-                    x: 0.85, y: 4.55, w: 11.6, h: 2.1,
+                    x: 0.8, y: 4.48, w: 11.7, h: 2.25,
                     fontFace: FONT_FACE, valign: 'top', lineSpacingMultiple: 1.25
                 });
 
@@ -1858,27 +1834,19 @@
                 addSlideChrome(slide3, `二、${trendTitle}`, '觀察各週次承接台次消長與累計回流累積曲線', 3);
 
                 slide3.addShape(pptx.ShapeType.rect, {
-                    x: 0.6, y: 1.2, w: 12.13, h: 0.68,
+                    x: 0.55, y: 1.15, w: 12.23, h: 0.65,
                     fill: { color: 'F0F9FF' }, line: { color: 'BAE6FD', width: 1 }
                 });
                 slide3.addText(trendInsightClean, {
-                    x: 0.78, y: 1.26, w: 11.8, h: 0.56,
-                    fontFace: FONT_FACE, fontSize: 11, color: '0C4A6E', valign: 'middle'
+                    x: 0.72, y: 1.2, w: 11.9, h: 0.55,
+                    fontFace: FONT_FACE, fontSize: 10.5, color: '0C4A6E', valign: 'middle'
                 });
 
-                const weeklyCanvas = document.getElementById('weeklyChart');
-                if (weeklyCanvas) {
-                    const weeklyImg = weeklyCanvas.toDataURL('image/png', 1.0);
-                    slide3.addShape(pptx.ShapeType.rect, {
-                        x: 0.6, y: 2.02, w: 12.13, h: 4.9,
-                        fill: { color: 'FFFFFF' }, line: { color: 'E2E8F0', width: 1 }
-                    });
-                    slide3.addImage({
-                        data: weeklyImg,
-                        x: 0.8, y: 2.12, w: 11.7, h: 4.7,
-                        sizing: { type: 'contain', w: 11.7, h: 4.7 }
-                    });
-                }
+                slide3.addShape(pptx.ShapeType.rect, {
+                    x: 0.55, y: 1.95, w: 12.23, h: 5.0,
+                    fill: { color: 'FFFFFF' }, line: { color: 'E2E8F0', width: 1 }
+                });
+                addFitCanvasImage(slide3, 'weeklyChart', 0.75, 2.08, 11.83, 4.74);
 
                 // SLIDE 4: Branch Share & Work Order Types
                 const slide4 = pptx.addSlide();
@@ -1888,46 +1856,32 @@
                 const typeInsightClean = document.getElementById('type-chart-insight').textContent;
 
                 slide4.addShape(pptx.ShapeType.rect, {
-                    x: 0.6, y: 1.25, w: 5.9, h: 5.65,
+                    x: 0.55, y: 1.2, w: 5.96, h: 5.75,
                     fill: { color: 'FFFFFF' }, line: { color: 'E2E8F0', width: 1 }
                 });
                 slide4.addText('各服務廠承接比例（分流去向）', {
-                    x: 0.8, y: 1.4, w: 5.5, h: 0.35,
+                    x: 0.75, y: 1.35, w: 5.56, h: 0.35,
                     fontFace: FONT_FACE, fontSize: 14, bold: true, color: '0F172A'
                 });
                 slide4.addText(branchInsightClean, {
-                    x: 0.8, y: 1.78, w: 5.5, h: 0.65,
-                    fontFace: FONT_FACE, fontSize: 10.5, color: '3730A3', valign: 'top'
+                    x: 0.75, y: 1.74, w: 5.56, h: 0.65,
+                    fontFace: FONT_FACE, fontSize: 10, color: '3730A3', valign: 'top'
                 });
-                const branchCanvas = document.getElementById('branchDoughnutChart');
-                if (branchCanvas) {
-                    slide4.addImage({
-                        data: branchCanvas.toDataURL('image/png', 1.0),
-                        x: 0.85, y: 2.55, w: 5.4, h: 4.1,
-                        sizing: { type: 'contain', w: 5.4, h: 4.1 }
-                    });
-                }
+                addFitCanvasImage(slide4, 'branchDoughnutChart', 0.75, 2.48, 5.56, 4.3);
 
                 slide4.addShape(pptx.ShapeType.rect, {
-                    x: 6.83, y: 1.25, w: 5.9, h: 5.65,
+                    x: 6.82, y: 1.2, w: 5.96, h: 5.75,
                     fill: { color: 'FFFFFF' }, line: { color: 'E2E8F0', width: 1 }
                 });
                 slide4.addText('回廠工單類別結構分析', {
-                    x: 7.03, y: 1.4, w: 5.5, h: 0.35,
+                    x: 7.02, y: 1.35, w: 5.56, h: 0.35,
                     fontFace: FONT_FACE, fontSize: 14, bold: true, color: '0F172A'
                 });
                 slide4.addText(typeInsightClean, {
-                    x: 7.03, y: 1.78, w: 5.5, h: 0.65,
-                    fontFace: FONT_FACE, fontSize: 10.5, color: '92400E', valign: 'top'
+                    x: 7.02, y: 1.74, w: 5.56, h: 0.65,
+                    fontFace: FONT_FACE, fontSize: 10, color: '92400E', valign: 'top'
                 });
-                const typeCanvas = document.getElementById('typeBarChart');
-                if (typeCanvas) {
-                    slide4.addImage({
-                        data: typeCanvas.toDataURL('image/png', 1.0),
-                        x: 7.08, y: 2.55, w: 5.4, h: 4.1,
-                        sizing: { type: 'contain', w: 5.4, h: 4.1 }
-                    });
-                }
+                addFitCanvasImage(slide4, 'typeBarChart', 7.02, 2.48, 5.56, 4.3);
 
                 // SLIDE 5: Cross Matrix Pivot Table
                 const slide5 = pptx.addSlide();
@@ -1935,74 +1889,58 @@
 
                 const pivotInsightClean = document.getElementById('pivot-matrix-insight').textContent;
                 slide5.addText(pivotInsightClean, {
-                    x: 0.6, y: 1.18, w: 12.13, h: 0.42,
-                    fontFace: FONT_FACE, fontSize: 11, bold: true, color: '0369A1'
+                    x: 0.55, y: 1.15, w: 12.23, h: 0.4,
+                    fontFace: FONT_FACE, fontSize: 10.5, bold: true, color: '0369A1'
                 });
 
                 const types = state.typeList;
-                const headerCells = [
-                    { text: '承接服務廠別', options: { bold: true, fill: { color: '1E293B' }, color: 'FFFFFF', align: 'left' } },
-                    ...types.map(t => ({ text: t, options: { bold: true, fill: { color: '1E293B' }, color: 'FFFFFF', align: 'right' } })),
-                    { text: '總承接台次', options: { bold: true, fill: { color: '0284C7' }, color: 'FFFFFF', align: 'right' } },
-                    { text: '分流佔比', options: { bold: true, fill: { color: '1E293B' }, color: 'FFFFFF', align: 'right' } }
+                const totalVisits = state.filteredRecords.length;
+                const headerRowCells = [
+                    { text: '承接服務廠別', options: { bold: true, color: 'FFFFFF', fill: '1E293B', align: 'left' } },
+                    ...types.map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: '1E293B', align: 'right' } })),
+                    { text: '總承接台次', options: { bold: true, color: 'FFFFFF', fill: '0284C7', align: 'right' } },
+                    { text: '分流佔比', options: { bold: true, color: 'FFFFFF', fill: '1E293B', align: 'right' } },
+                    { text: '不重複車數', options: { bold: true, color: 'FFFFFF', fill: '1E293B', align: 'right' } }
                 ];
-                if (hasPlate) {
-                    headerCells.push({ text: '不重複車數', options: { bold: true, fill: { color: '1E293B' }, color: 'FFFFFF', align: 'right' } });
-                }
-                if (hasAmount) {
-                    headerCells.push({ text: '累計金額', options: { bold: true, fill: { color: '1E293B' }, color: 'FFFFFF', align: 'right' } });
-                }
 
-                const tableRows = [headerCells];
-                const colTotals = {};
-                types.forEach(t => { colTotals[t] = 0; });
-                const grandPlates = new Set();
-                let grandAmt = 0;
+                const tableRows = [headerRowCells];
+                const typeSums = {};
+                types.forEach(t => { typeSums[t] = 0; });
+                const allSlidePlates = new Set();
 
                 state.pivotRows.slice(0, 10).forEach((row, rIdx) => {
                     const bg = rIdx % 2 === 0 ? 'FFFFFF' : 'F8FAFC';
-                    const sharePct = totalVisits > 0 ? ((row.totalVisits / totalVisits) * 100).toFixed(1) + '%' : '0.0%';
-                    row.plates.forEach(p => grandPlates.add(p));
-                    grandAmt += row.totalAmount;
+                    const sharePct = totalVisits > 0 ? `${((row.totalVisits / totalVisits) * 100).toFixed(1)}%` : '0.0%';
+                    row.plates.forEach(p => allSlidePlates.add(p));
 
                     const cells = [
-                        { text: row.branch, options: { bold: true, fill: { color: bg }, color: '0F172A', align: 'left' } },
+                        { text: row.branch, options: { bold: true, color: '0F172A', fill: bg, align: 'left' } },
                         ...types.map(t => {
-                            const cnt = row.typeCounts[t] || 0;
-                            colTotals[t] += cnt;
-                            return { text: cnt > 0 ? cnt.toLocaleString() : '-', options: { fill: { color: bg }, color: cnt > 0 ? '1E293B' : '94A3B8', align: 'right' } };
+                            const c = row.typeCounts[t] || 0;
+                            typeSums[t] += c;
+                            return { text: c > 0 ? String(c) : '-', options: { color: c > 0 ? '1E293B' : '94A3B8', fill: bg, align: 'right' } };
                         }),
-                        { text: row.totalVisits.toLocaleString(), options: { bold: true, fill: { color: 'E0F2FE' }, color: '0369A1', align: 'right' } },
-                        { text: sharePct, options: { bold: true, fill: { color: bg }, color: '334155', align: 'right' } }
+                        { text: String(row.totalVisits), options: { bold: true, color: '0369A1', fill: 'F0F9FF', align: 'right' } },
+                        { text: sharePct, options: { color: '475569', fill: bg, align: 'right' } },
+                        { text: String(row.plates.size), options: { color: '334155', fill: bg, align: 'right' } }
                     ];
-                    if (hasPlate) {
-                        cells.push({ text: row.plates.size.toLocaleString(), options: { fill: { color: bg }, color: '475569', align: 'right' } });
-                    }
-                    if (hasAmount) {
-                        cells.push({ text: `$${Math.round(row.totalAmount).toLocaleString()}`, options: { fill: { color: bg }, color: '334155', align: 'right' } });
-                    }
                     tableRows.push(cells);
                 });
 
                 const totalCells = [
-                    { text: `總計 (${state.pivotRows.length} 廠)`, options: { bold: true, fill: { color: 'E2E8F0' }, color: '0F172A', align: 'left' } },
-                    ...types.map(t => ({ text: colTotals[t].toLocaleString(), options: { bold: true, fill: { color: 'E2E8F0' }, color: '0F172A', align: 'right' } })),
-                    { text: totalVisits.toLocaleString(), options: { bold: true, fill: { color: 'BAE6FD' }, color: '0C4A6E', align: 'right' } },
-                    { text: '100.0%', options: { bold: true, fill: { color: 'E2E8F0' }, color: '0F172A', align: 'right' } }
+                    { text: '總計', options: { bold: true, color: '0F172A', fill: 'E2E8F0', align: 'left' } },
+                    ...types.map(t => ({ text: String(typeSums[t]), options: { bold: true, color: '0F172A', fill: 'E2E8F0', align: 'right' } })),
+                    { text: String(totalVisits), options: { bold: true, color: '0C4A6E', fill: 'BAE6FD', align: 'right' } },
+                    { text: '100.0%', options: { bold: true, color: '0F172A', fill: 'E2E8F0', align: 'right' } },
+                    { text: String(allSlidePlates.size), options: { bold: true, color: '0F172A', fill: 'E2E8F0', align: 'right' } }
                 ];
-                if (hasPlate) {
-                    totalCells.push({ text: grandPlates.size.toLocaleString(), options: { bold: true, fill: { color: 'E2E8F0' }, color: '0F172A', align: 'right' } });
-                }
-                if (hasAmount) {
-                    totalCells.push({ text: `$${Math.round(grandAmt).toLocaleString()}`, options: { bold: true, fill: { color: 'E2E8F0' }, color: '0F172A', align: 'right' } });
-                }
                 tableRows.push(totalCells);
 
                 slide5.addTable(tableRows, {
-                    x: 0.6, y: 1.7, w: 12.13,
-                    fontFace: FONT_FACE, fontSize: 11,
+                    x: 0.55, y: 1.65, w: 12.23,
+                    fontFace: FONT_FACE, fontSize: 10.5,
                     border: { type: 'solid', color: 'CBD5E1', pt: 0.75 },
-                    rowH: 0.42
+                    rowH: 0.4
                 });
 
                 // SLIDE 6: Management Executive Summary & Actions
@@ -2019,32 +1957,32 @@
                 reportBlocks.forEach((blk, idx) => {
                     const col = idx % 2;
                     const row = Math.floor(idx / 2);
-                    const bx = 0.6 + col * 6.2;
-                    const by = 1.3 + row * 2.85;
+                    const bx = 0.55 + col * 6.26;
+                    const by = 1.25 + row * 2.88;
 
                     slide6.addShape(pptx.ShapeType.rect, {
-                        x: bx, y: by, w: 5.93, h: 2.62,
+                        x: bx, y: by, w: 5.97, h: 2.65,
                         fill: { color: 'FFFFFF' }, line: { color: 'CBD5E1', width: 1 }
                     });
                     slide6.addShape(pptx.ShapeType.rect, {
-                        x: bx, y: by, w: 0.08, h: 2.62, fill: { color: blk.color }
+                        x: bx, y: by, w: 0.08, h: 2.65, fill: { color: blk.color }
                     });
                     slide6.addText(blk.title, {
-                        x: bx + 0.25, y: by + 0.16, w: 5.5, h: 0.35,
-                        fontFace: FONT_FACE, fontSize: 13.5, bold: true, color: blk.color
+                        x: bx + 0.22, y: by + 0.16, w: 5.55, h: 0.35,
+                        fontFace: FONT_FACE, fontSize: 13, bold: true, color: blk.color
                     });
                     slide6.addText(blk.text, {
-                        x: bx + 0.25, y: by + 0.58, w: 5.5, h: 1.9,
-                        fontFace: FONT_FACE, fontSize: 11, color: '1E293B', valign: 'top', lineSpacingMultiple: 1.25
+                        x: bx + 0.22, y: by + 0.56, w: 5.55, h: 1.95,
+                        fontFace: FONT_FACE, fontSize: 10.5, color: '1E293B', valign: 'top', lineSpacingMultiple: 1.25
                     });
                 });
 
                 const fileNameDate = reportDateStr.replace(/\//g, '');
                 await pptx.writeFile({ fileName: `${branchDisplayName}撤廠車主分流追蹤報告_${fileNameDate}.pptx` });
-                showToast('PowerPoint (.pptx) 簡報檔案已成功生成並下載！', 'success');
+                showToast('PowerPoint 簡報報告（6頁完整版）已成功生成並下載！', 'success');
             } catch (err) {
                 console.error(err);
-                showToast('生成 PPT 時發生錯誤，請稍後再試', 'error');
+                showToast('生成 PPT 時發生錯誤，請重新整理後再試', 'error');
             }
         }
 
@@ -2057,11 +1995,11 @@
 
             const undatedContainer = document.getElementById('modal-undated-list');
             if (state.undatedRows.length === 0) {
-                undatedContainer.innerHTML = '<div class="p-4 text-center text-slate-500">所有計入工單皆具備有效進廠日期！</div>';
+                undatedContainer.innerHTML = '<div class="p-4 text-center text-slate-500">無未填日期之異常工單，所有進廠日期皆正常解析！</div>';
             } else {
-                let html = '<table class="w-full text-xs text-left"><thead class="bg-slate-100 border-b border-slate-200"><tr><th class="p-2">列號</th><th class="p-2">牌照號碼</th><th class="p-2">承接廠</th><th class="p-2">工單類別</th><th class="p-2">原始日期欄位值</th></tr></thead><tbody class="divide-y divide-slate-100">';
+                let html = '<table class="w-full text-xs text-left"><thead class="bg-slate-100 text-slate-700"><tr><th class="p-2">列號</th><th class="p-2">牌照號碼</th><th class="p-2">承接廠別</th><th class="p-2">工單類別</th><th class="p-2">原始日期欄內容</th></tr></thead><tbody class="divide-y divide-slate-100">';
                 state.undatedRows.forEach(r => {
-                    html += `<tr><td class="p-2">${r.rowNum}</td><td class="p-2 font-semibold">${r.plate}</td><td class="p-2">${r.currBranch}</td><td class="p-2">${r.orderType}</td><td class="p-2 text-rose-600">${r.rawDateStr || '(空白)'}</td></tr>`;
+                    html += `<tr><td class="p-2">第 ${r.rowNum} 列</td><td class="p-2 font-semibold">${r.plate}</td><td class="p-2">${r.currBranch}</td><td class="p-2">${r.orderType}</td><td class="p-2 text-rose-600">${r.rawDateStr || '(空白)'}</td></tr>`;
                 });
                 html += '</tbody></table>';
                 undatedContainer.innerHTML = html;
@@ -2069,11 +2007,11 @@
 
             const excludedContainer = document.getElementById('modal-excluded-list');
             if (state.excludedRows.length === 0) {
-                excludedContainer.innerHTML = '<div class="p-4 text-center text-slate-500">無排除任何空白車牌或合計列。</div>';
+                excludedContainer.innerHTML = '<div class="p-4 text-center text-slate-500">無被排除之無車牌或合計列資料。</div>';
             } else {
-                let html = '<table class="w-full text-xs text-left"><thead class="bg-slate-100 border-b border-slate-200"><tr><th class="p-2">列號</th><th class="p-2">排除原因</th><th class="p-2">上次保養廠</th><th class="p-2">車牌</th></tr></thead><tbody class="divide-y divide-slate-100">';
+                let html = '<table class="w-full text-xs text-left"><thead class="bg-slate-100 text-slate-700"><tr><th class="p-2">列號</th><th class="p-2">排除原因</th><th class="p-2">上次保養廠</th><th class="p-2">牌照號碼</th></tr></thead><tbody class="divide-y divide-slate-100">';
                 state.excludedRows.forEach(r => {
-                    html += `<tr><td class="p-2">${r.rowNum}</td><td class="p-2 text-amber-700">${r.reason}</td><td class="p-2">${r.prevBranch}</td><td class="p-2">${r.plate}</td></tr>`;
+                    html += `<tr><td class="p-2">第 ${r.rowNum} 列</td><td class="p-2 text-amber-700">${r.reason}</td><td class="p-2">${r.prevBranch}</td><td class="p-2">${r.plate}</td></tr>`;
                 });
                 html += '</tbody></table>';
                 excludedContainer.innerHTML = html;
@@ -2083,95 +2021,88 @@
         }
 
         // ==========================================
-        // Sample Data Generator (Simulates DMS 070 Report)
+        // Load Realistic Demo Dataset (Simulates DMS 070 Report)
         // ==========================================
-        function loadSampleData() {
-            const sampleGrid = [
-                ['070 - 工單進出廠動態表', '', '', '', '', '', ''],
-                ['查詢期間：115/10/01 ~ 115/11/25', '廠別：全區服務廠', '', '', '', '', ''],
-                ['序號', '上次保養廠別', '本次進廠廠別', '工單類別', '牌照號碼', '本次進廠日期', '工單金額']
-            ];
+        function loadSampleDataset() {
+            const branches = ['九和忠孝廠', '九和內湖廠', '九和濱江廠', '九和承德廠', '九和莒光廠'];
+            const branchWeights = [0.41, 0.40, 0.14, 0.04, 0.01];
+            const orderTypes = ['引電', '保險', '索賠', '鈑噴'];
+            const typeWeights = [0.92, 0.045, 0.02, 0.015];
 
-            const receivingBranches = [
-                { name: '九和忠孝廠', weight: 41 },
-                { name: '九和內湖廠', weight: 40 },
-                { name: '九和濱江廠', weight: 14 },
-                { name: '九和承德廠', weight: 4 },
-                { name: '九和莒光廠', weight: 1 }
-            ];
-
-            const orderTypes = [
-                { name: '引電', weight: 92, minAmt: 2800, maxAmt: 11500 },
-                { name: '保險', weight: 4.5, minAmt: 15000, maxAmt: 48000 },
-                { name: '索賠', weight: 2.2, minAmt: 0, maxAmt: 4500 },
-                { name: '鈑噴', weight: 1.3, minAmt: 12000, maxAmt: 36000 }
-            ];
-
-            const pickWeighted = (list) => {
-                const totalW = list.reduce((s, x) => s + x.weight, 0);
-                let rnd = Math.random() * totalW;
-                for (const item of list) {
-                    if (rnd < item.weight) return item;
-                    rnd -= item.weight;
+            const pickWeighted = (items, weights) => {
+                const r = Math.random();
+                let acc = 0;
+                for (let i = 0; i < items.length; i++) {
+                    acc += weights[i];
+                    if (r <= acc) return items[i];
                 }
-                return list[0];
+                return items[0];
             };
 
-            const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-            const makePlate = (idx) => {
-                const p1 = letters[idx % letters.length] + letters[(idx * 3) % letters.length] + letters[(idx * 7) % letters.length];
-                const num = String(1000 + ((idx * 137) % 8999));
-                return `${p1}-${num}`;
-            };
+            // Simulate DMS report with merged title banner on Row 1 & Row 2
+            const mockGrid = [
+                ['070 - 工單進出廠動態表', '', '', '', '', '', ''],
+                ['查詢條件：進廠日期 115/09/01 ~ 115/11/25', '', '', '', '', '', ''],
+                ['工單號碼', '牌照號碼', '上次保養廠別', '本次進廠廠別', '工單類別', '進廠日期', '工單金額']
+            ];
 
-            // Generate 294 records matching user's pivot scale
-            const startDate = new Date(2026, 9, 5); // 2026/10/05
-            for (let i = 1; i <= 294; i++) {
-                const br = pickWeighted(receivingBranches);
-                const tp = pickWeighted(orderTypes);
-                const dayOffset = Math.floor((i / 294) * 52);
+            const samplePlates = [];
+            for (let i = 1; i <= 265; i++) {
+                const num = String(1000 + i * 17).slice(-4);
+                samplePlates.push(`B${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + ((i * 3) % 26))}-${num}`);
+            }
+
+            const startDate = new Date(2026, 8, 1); // 2026-09-01 (ROC 115/09/01)
+            for (let i = 0; i < 294; i++) {
+                const plate = i < 265 ? samplePlates[i] : samplePlates[i % 90];
+                const currBr = pickWeighted(branches, branchWeights);
+                const oType = pickWeighted(orderTypes, typeWeights);
+                const dayOffset = Math.floor((i / 294) * 84);
                 const d = new Date(startDate);
                 d.setDate(startDate.getDate() + dayOffset);
-                const rocDate = `${d.getFullYear() - 1911}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-                const amt = Math.round((tp.minAmt + Math.random() * (tp.maxAmt - tp.minAmt)) / 100) * 100;
+                const rocDate = `115/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                const baseAmt = oType === '鈑噴' ? 18500 : oType === '保險' ? 14200 : oType === '索賠' ? 6800 : 4650;
+                const amt = baseAmt + Math.floor(Math.random() * 2500);
 
-                sampleGrid.push([
-                    i,
+                mockGrid.push([
+                    `W115${String(10001 + i)}`,
+                    plate,
                     '九和八堵廠',
-                    br.name,
-                    tp.name,
-                    makePlate(i % 245), // ~245 unique cars across 294 visits
-                    i === 294 ? '' : rocDate, // 1 undated row to demonstrate audit accuracy
+                    currBr,
+                    oType,
+                    rocDate,
                     amt
                 ]);
             }
 
-            // Add a few other source branches and a summary row to test filtering
-            sampleGrid.push([295, '九和忠孝廠', '九和忠孝廠', '引電', 'ABC-9999', '115/11/10', 4200]);
-            sampleGrid.push(['總計', '九和八堵廠', '', '', '', '', 1850000]);
+            // Add a few other source branches and summary row to test smart filtering
+            mockGrid.push(['W11519901', 'ABC-9988', '九和承德廠', '九和承德廠', '引電', '115/10/15', 5200]);
+            mockGrid.push(['W11519902', 'XYZ-7766', '九和忠孝廠', '九和忠孝廠', '引電', '115/10/18', 4800]);
+            mockGrid.push(['總計', '', '總計', '', '', '', '']);
 
             state.workbook = null;
-            state.sheetNames = ['範例工作表'];
-            state.currentSheet = '範例工作表';
-            state.rawGrid = sampleGrid;
-            state.headerRowIndex = detectHeaderRowIndex(sampleGrid);
+            state.sheetNames = ['070動態表範例'];
+            state.currentSheet = '070動態表範例';
+            state.rawGrid = mockGrid;
 
             document.getElementById('file-badge-bar').classList.remove('hidden');
-            document.getElementById('current-file-name').textContent = '已載入：070_八堵廠撤廠追蹤範例報表.xlsx (模擬 DMS 格式)';
+            document.getElementById('current-file-name').textContent = '已載入範例：070 - 工單進出廠動態表（模擬八堵廠撤廠 294 筆實績）';
 
             const sheetSelect = document.getElementById('select-sheet');
-            sheetSelect.innerHTML = '<option value="範例工作表">範例工作表</option>';
+            sheetSelect.innerHTML = '<option value="070動態表範例">070動態表範例</option>';
+
+            state.headerRowIndex = detectHeaderRowIndex(mockGrid);
             document.getElementById('input-header-row').value = state.headerRowIndex + 1;
-            document.getElementById('header-detect-badge').textContent = `已鎖定第 ${state.headerRowIndex + 1} 列為標題列`;
+            document.getElementById('header-detect-badge').textContent = `已自動跳過前 ${state.headerRowIndex} 列大標題，鎖定第 ${state.headerRowIndex + 1} 列`;
 
             extractHeadersAndAutoMap();
-            showToast('已載入原「九和八堵廠」撤廠追蹤範例報表（294 筆有效工單）！', 'success');
+            showToast('已載入模擬報表（294 筆原八堵廠回流工單）！', 'success');
         }
 
         // ==========================================
         // Event Listeners Initialization
         // ==========================================
-        document.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', () => {
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
@@ -2188,42 +2119,23 @@
 
             dropzone.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                dropzone.classList.add('border-sky-500', 'bg-sky-50');
+                dropzone.classList.add('border-sky-500', 'bg-sky-50/60');
             });
             dropzone.addEventListener('dragleave', () => {
-                dropzone.classList.remove('border-sky-500', 'bg-sky-50');
+                dropzone.classList.remove('border-sky-500', 'bg-sky-50/60');
             });
             dropzone.addEventListener('drop', (e) => {
                 e.preventDefault();
-                dropzone.classList.remove('border-sky-500', 'bg-sky-50');
+                dropzone.classList.remove('border-sky-500', 'bg-sky-50/60');
                 if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                     handleFileUpload(e.dataTransfer.files[0]);
                 }
             });
 
-            // Sheet & Header Row adjustments
-            document.getElementById('select-sheet').addEventListener('change', (e) => {
-                if (state.workbook) loadSheet(e.target.value, true);
-            });
-
-            const updateHeaderRow = (newRow1Based) => {
-                const maxRow = Math.max(1, state.rawGrid.length);
-                const clamped = Math.min(Math.max(1, newRow1Based), maxRow);
-                state.headerRowIndex = clamped - 1;
-                document.getElementById('input-header-row').value = clamped;
-                document.getElementById('header-detect-badge').textContent = `手動鎖定第 ${clamped} 列為標題列`;
-                extractHeadersAndAutoMap();
-            };
-
-            document.getElementById('btn-row-minus').addEventListener('click', () => {
-                updateHeaderRow(parseInt(document.getElementById('input-header-row').value || '1', 10) - 1);
-            });
-            document.getElementById('btn-row-plus').addEventListener('click', () => {
-                updateHeaderRow(parseInt(document.getElementById('input-header-row').value || '1', 10) + 1);
-            });
-            document.getElementById('input-header-row').addEventListener('change', (e) => {
-                updateHeaderRow(parseInt(e.target.value || '1', 10));
-            });
+            document.getElementById('btn-load-sample').addEventListener('click', loadSampleDataset);
+            document.getElementById('btn-export-excel').addEventListener('click', exportAnalysisReport);
+            document.getElementById('btn-export-ppt').addEventListener('click', exportPowerPointReport);
+            document.getElementById('btn-copy-report').addEventListener('click', copyManagementReport);
 
             // Toggle mapping panel
             document.getElementById('btn-toggle-mapping').addEventListener('click', () => {
@@ -2232,7 +2144,30 @@
                 document.getElementById('toggle-mapping-text').textContent = isHidden ? '展開設定' : '收合設定';
             });
 
-            // Column mapping changes
+            // Sheet & Header Row controls
+            document.getElementById('select-sheet').addEventListener('change', (e) => {
+                if (state.workbook) loadSheet(e.target.value, true);
+            });
+
+            const updateHeaderRow = (newRow1Based) => {
+                const clamped = Math.max(1, Math.min(state.rawGrid.length || 50, newRow1Based));
+                state.headerRowIndex = clamped - 1;
+                document.getElementById('input-header-row').value = clamped;
+                document.getElementById('header-detect-badge').textContent = `手動鎖定第 ${clamped} 列為標題列`;
+                extractHeadersAndAutoMap();
+            };
+
+            document.getElementById('btn-row-minus').addEventListener('click', () => {
+                updateHeaderRow(parseInt(document.getElementById('input-header-row').value, 10) - 1);
+            });
+            document.getElementById('btn-row-plus').addEventListener('click', () => {
+                updateHeaderRow(parseInt(document.getElementById('input-header-row').value, 10) + 1);
+            });
+            document.getElementById('input-header-row').addEventListener('change', (e) => {
+                updateHeaderRow(parseInt(e.target.value, 10) || 1);
+            });
+
+            // Mapping dropdown changes
             document.getElementById('select-target-branch').addEventListener('change', (e) => {
                 state.targetBranch = e.target.value;
                 processAndRenderDashboard();
@@ -2263,34 +2198,35 @@
                 applyInteractiveFilters();
             });
 
-            // Chart stack & granularity toggles
-            document.getElementById('btn-stack-branch').addEventListener('click', () => {
+            // Trend chart stack & granularity toggles
+            const setActiveBtn = (activeEl, inactiveEl) => {
+                activeEl.className = 'px-2.5 py-1.5 rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer';
+                inactiveEl.className = 'px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer';
+            };
+
+            document.getElementById('btn-stack-branch').addEventListener('click', (e) => {
                 state.stackMode = 'branch';
-                document.getElementById('btn-stack-branch').className = 'px-2.5 py-1.5 rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer';
-                document.getElementById('btn-stack-type').className = 'px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer';
-                buildAggregationsAndRender(state.filteredRecords);
+                setActiveBtn(e.target, document.getElementById('btn-stack-type'));
+                applyInteractiveFilters();
             });
-            document.getElementById('btn-stack-type').addEventListener('click', () => {
+            document.getElementById('btn-stack-type').addEventListener('click', (e) => {
                 state.stackMode = 'type';
-                document.getElementById('btn-stack-type').className = 'px-2.5 py-1.5 rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer';
-                document.getElementById('btn-stack-branch').className = 'px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer';
-                buildAggregationsAndRender(state.filteredRecords);
+                setActiveBtn(e.target, document.getElementById('btn-stack-branch'));
+                applyInteractiveFilters();
             });
 
-            document.getElementById('btn-granularity-week').addEventListener('click', () => {
+            document.getElementById('btn-granularity-week').addEventListener('click', (e) => {
                 state.granularity = 'week';
-                document.getElementById('btn-granularity-week').className = 'px-2.5 py-1.5 rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer';
-                document.getElementById('btn-granularity-month').className = 'px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer';
-                buildAggregationsAndRender(state.filteredRecords);
+                setActiveBtn(e.target, document.getElementById('btn-granularity-month'));
+                applyInteractiveFilters();
             });
-            document.getElementById('btn-granularity-month').addEventListener('click', () => {
+            document.getElementById('btn-granularity-month').addEventListener('click', (e) => {
                 state.granularity = 'month';
-                document.getElementById('btn-granularity-month').className = 'px-2.5 py-1.5 rounded-lg bg-white text-slate-900 shadow-2xs cursor-pointer';
-                document.getElementById('btn-granularity-week').className = 'px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer';
-                buildAggregationsAndRender(state.filteredRecords);
+                setActiveBtn(e.target, document.getElementById('btn-granularity-week'));
+                applyInteractiveFilters();
             });
 
-            // Audit Modal
+            // Audit Modal controls
             document.getElementById('btn-view-audit-modal').addEventListener('click', openAuditModal);
             document.getElementById('btn-close-audit-modal').addEventListener('click', () => {
                 document.getElementById('audit-modal').classList.add('hidden');
@@ -2298,12 +2234,6 @@
             document.getElementById('btn-close-audit-modal-footer').addEventListener('click', () => {
                 document.getElementById('audit-modal').classList.add('hidden');
             });
-
-            // Copy Report & Exports
-            document.getElementById('btn-copy-report').addEventListener('click', copyManagementReport);
-            document.getElementById('btn-load-sample').addEventListener('click', loadSampleData);
-            document.getElementById('btn-export-ppt').addEventListener('click', exportPowerPointReport);
-            document.getElementById('btn-export-excel').addEventListener('click', exportAnalysisReport);
         });
     </script>
 </body>
